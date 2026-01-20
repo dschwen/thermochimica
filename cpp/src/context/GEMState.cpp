@@ -56,7 +56,8 @@ void GEMState::reset() {
     dMaxSpeciesChange = 0.0;
     dMinGibbs = 0.0;
 
-    lDebugMode = false;
+    // NOTE: Preserve lDebugMode across resets (user sets this before calling thermochimica)
+    // lDebugMode = false;
     lRevertSystem = false;
     lConverged = false;
 

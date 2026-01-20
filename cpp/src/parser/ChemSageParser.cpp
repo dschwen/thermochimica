@@ -79,23 +79,27 @@ int ChemSageParser::parseHeader(ThermoContext& ctx, std::ifstream& file) {
     }
 
     p.nElementsCS = std::stoi(tokens[0]);
-    p.nSolnPhasesSysCS = std::stoi(tokens[1]);
-    int iGasPhase = std::stoi(tokens[2]);
+    p.nSolnPhasesInFile = std::stoi(tokens[1]);  // Store original count
+    p.nSolnPhasesSysCS = p.nSolnPhasesInFile;
+    p.iGasPhase = std::stoi(tokens[2]);
 
     // Check limits
     if (p.nSolnPhasesSysCS > ParserState::kSolnPhasesSysMax) {
         return 8;
     }
 
-    // Adjust for gas phase presence (follow Fortran logic)
-    int nDummies = 1;  // Number of dummy values to skip when rereading
-    if (iGasPhase == 0) {
+    // Adjust for gas phase presence (follow Fortran logic exactly)
+    // The iGasPhase value determines how many dummy values to skip:
+    // - iGasPhase == 0: no gas phase, skip 2 dummies (tokens[1] and tokens[2])
+    // - iGasPhase != 0: gas phase exists, skip 1 dummy (tokens[1])
+    int nDummies;
+    if (p.iGasPhase == 0) {
         // No gas phase - number of solution phases is decremented
         p.nSolnPhasesSysCS--;
-        nDummies = 1;
+        nDummies = 2;  // Skip tokens[1] (nSolnPhases) and tokens[2] (iGasPhase=0)
     } else {
         // Gas phase exists
-        nDummies = 1;  // tokens[1] is a dummy
+        nDummies = 1;  // Skip tokens[1] (nSolnPhases, which is a dummy when gas exists)
     }
 
     // Allocate parser arrays
@@ -120,8 +124,10 @@ int ChemSageParser::parseHeader(ThermoContext& ctx, std::ifstream& file) {
     p.nPairsSROCS.setZero();
 
     // Parse line 2 using Fortran-style interpretation:
-    // tokens: [nElements, dummy1, nSpeciesPhase(1), ..., nSpeciesPhase(nPhases), nPureSpecies]
-    // After nElements (tokens[0]), skip nDummies, then read phase species counts, then pure species
+    // tokens: [nElements, nSolnPhases, iGasPhase, nSpeciesPhase(1), ..., nSpeciesPhase(nPhases), nPureSpecies]
+    // After nElements (tokens[0]), skip nDummies to get to species counts
+    // nDummies=1 when gas exists: skip tokens[1]
+    // nDummies=2 when no gas: skip tokens[1] and tokens[2]
     int tokenOffset = 1 + nDummies;  // Skip nElements and dummies
 
     // Read species counts per phase
@@ -172,8 +178,8 @@ int ChemSageParser::parseHeader(ThermoContext& ctx, std::ifstream& file) {
     p.dQKTOParamsCS.resize(p.nSpeciesCS, 2);
     p.dQKTOParamsCS.setZero();
 
-    // Line 3: Element names
-    tokens = readTokens(file);
+    // Line 3: Element names - may span multiple lines
+    tokens = readTokens(file, p.nElementsCS);
     if (static_cast<int>(tokens.size()) < p.nElementsCS) {
         return 103;
     }
@@ -238,75 +244,106 @@ int ChemSageParser::parseDataBlock(ThermoContext& ctx, std::ifstream& file) {
     std::string line;
 
     int speciesIndex = 0;
+    int realPhaseIndex = 0;  // Index for actual stored phases
 
     // Parse solution phases
-    for (int iPhase = 0; iPhase < p.nSolnPhasesSysCS; ++iPhase) {
+    // When iGasPhase == 0, the file contains nSolnPhasesSysCS phases (not nSolnPhasesInFile)
+    // because the "absent gas phase" is not in the data, just the header count was adjusted
+    int nPhasesInFile = p.nSolnPhasesSysCS;
+    for (int iFilePhase = 0; iFilePhase < nPhasesInFile; ++iFilePhase) {
         // Read phase name (Entry 1 - separate line, Fortran uses FORMAT(A25))
         if (!std::getline(file, line)) {
-            return 1100 + iPhase;
+            return 1100 + iFilePhase;
         }
         // Trim whitespace
         size_t start = line.find_first_not_of(" \t");
-        if (start == std::string::npos) start = 0;
-        size_t end = line.find_last_not_of(" \t");
-        p.cSolnPhaseNameCS[iPhase] = line.substr(start, end - start + 1);
+        std::string phaseName;
+        if (start == std::string::npos) {
+            phaseName = "";
+        } else {
+            size_t end = line.find_last_not_of(" \t");
+            phaseName = line.substr(start, end - start + 1);
+        }
 
         // Read phase type (Entry 2 - separate line)
         auto tokens = readTokens(file);
         if (tokens.empty()) {
-            return 1200 + iPhase;
+            return 1200 + iFilePhase;
         }
-        p.cSolnPhaseTypeCS[iPhase] = tokens[0];
+        std::string phaseType = tokens[0];
+
+        // Check if this is an empty placeholder phase
+        // Fortran skips: 1) phases where first 6 chars are spaces, 2) phase name exactly "Delete"
+        // For " Delete" (with leading space), it's NOT skipped - it's a real phase
+        bool isEmptyPhase = (line.length() >= 6 && line.substr(0, 6) == "      ");
+        // Also check for exact "Delete" at start of line (no leading whitespace)
+        if (!isEmptyPhase && line.length() >= 6 && line.substr(0, 6) == "Delete") {
+            isEmptyPhase = true;
+        }
+
+        if (isEmptyPhase) {
+            // Empty placeholder phase - just name and type, no species
+            continue;
+        }
+
+        // This is a real phase to process
+        p.cSolnPhaseNameCS[realPhaseIndex] = phaseName;
+        p.cSolnPhaseTypeCS[realPhaseIndex] = phaseType;
 
         // Check if phase type is supported
-        if (!ParserState::isPhaseTypeSupported(p.cSolnPhaseTypeCS[iPhase])) {
+        if (!ParserState::isPhaseTypeSupported(phaseType)) {
             return ErrorCode::kUnsupportedPhaseType;
         }
 
-        // Get phase type
-        Constants::PhaseType phaseType = ParserState::getPhaseType(p.cSolnPhaseTypeCS[iPhase]);
+        // Get phase type enum
+        Constants::PhaseType phaseTypeEnum = ParserState::getPhaseType(phaseType);
 
         // Parse phase-specific data based on type
-        int nSpeciesInPhase = p.nSpeciesPhaseCS(iPhase + 1) - p.nSpeciesPhaseCS(iPhase);
+        int nSpeciesInPhase = p.nSpeciesPhaseCS(realPhaseIndex + 1) - p.nSpeciesPhaseCS(realPhaseIndex);
 
         // For sublattice phases, read additional structure data
-        if (phaseType == Constants::PhaseType::SUBL ||
-            phaseType == Constants::PhaseType::SUBLM ||
-            phaseType == Constants::PhaseType::SUBI ||
-            phaseType == Constants::PhaseType::SUBM) {
-            int result = parseSUBLPhase(ctx, file, iPhase);
+        if (phaseTypeEnum == Constants::PhaseType::SUBL ||
+            phaseTypeEnum == Constants::PhaseType::SUBLM ||
+            phaseTypeEnum == Constants::PhaseType::SUBI ||
+            phaseTypeEnum == Constants::PhaseType::SUBM) {
+            int result = parseSUBLPhase(ctx, file, realPhaseIndex);
             if (result != 0) return result;
-        } else if (phaseType == Constants::PhaseType::SUBG ||
-                   phaseType == Constants::PhaseType::SUBQ) {
-            int result = parseSUBGPhase(ctx, file, iPhase);
+        } else if (phaseTypeEnum == Constants::PhaseType::SUBG ||
+                   phaseTypeEnum == Constants::PhaseType::SUBQ) {
+            int result = parseSUBGPhase(ctx, file, realPhaseIndex);
             if (result != 0) return result;
         }
 
         // Parse each species in this phase
         for (int i = 0; i < nSpeciesInPhase; ++i) {
             int result = parseSolutionPhase(ctx, file, speciesIndex);
-            if (result != 0) return result;
+            if (result != 0) {
+                return result;
+            }
 
-            p.iPhaseCS(speciesIndex) = iPhase + 1;  // 1-based phase index
+            p.iPhaseCS(speciesIndex) = realPhaseIndex + 1;  // 1-based phase index
             ++speciesIndex;
         }
 
         // Parse mixing parameters for this phase (only for non-ideal phases)
         // IDMX (ideal mixing) has no mixing parameters
-        if (phaseType != Constants::PhaseType::IDMX) {
+        if (phaseTypeEnum != Constants::PhaseType::IDMX) {
             tokens = readTokens(file);
+            std::cerr << "\n";
             if (!tokens.empty()) {
                 try {
                     int nParams = std::stoi(tokens[0]);
                     if (nParams > 0) {
-                        int result = parseMixingParameters(ctx, file, iPhase, nParams);
+                        int result = parseMixingParameters(ctx, file, realPhaseIndex, nParams);
                         if (result != 0) return result;
                     }
                 } catch (const std::exception& e) {
-                    return 1700 + iPhase;  // Mixing params conversion error
+                    return 1700 + realPhaseIndex;  // Mixing params conversion error
                 }
             }
         }
+
+        ++realPhaseIndex;
     }
 
     // Parse pure condensed phases
@@ -331,6 +368,7 @@ int ChemSageParser::parseSolutionPhase(ThermoContext& ctx, std::ifstream& file,
     if (!std::getline(file, line)) {
         return 1300 + speciesIndex;
     }
+
     // Trim whitespace
     size_t start = line.find_first_not_of(" \t");
     if (start == std::string::npos) {
@@ -387,7 +425,9 @@ int ChemSageParser::parseSolutionPhase(ThermoContext& ctx, std::ifstream& file,
 
     // Parse Gibbs energy equations
     int result = parseGibbsEquations(ctx, file, speciesIndex, nGibbsEqs, iGibbsEqType);
-    if (result != 0) return result;
+    if (result != 0) {
+        return result;
+    }
 
     return 0;
 }
@@ -414,6 +454,7 @@ int ChemSageParser::parseGibbsEquations(ThermoContext& ctx, std::ifstream& file,
         if (iGibbsEqType == 4 || iGibbsEqType == 16) {
             // Read the number of additional terms (first value of next line)
             auto addTerms = readTokens(file);
+            std::cerr << "\n";
             if (addTerms.empty()) {
                 continue;  // No additional terms
             }
@@ -493,12 +534,62 @@ int ChemSageParser::parseMixingParameters(ThermoContext& ctx, std::ifstream& fil
                                           int phaseIndex, int nParams) {
     auto& p = *ctx.parser;
 
+
+    // For RKMP, each parameter has: 3 indices (i, j, k) + 6 values = 9 total values
+    // The indices are on one line, values on the next (possibly spanning lines)
+    int paramsRead = 0;
     for (int i = 0; i < nParams; ++i) {
-        // Read parameter line
-        auto tokens = readTokens(file);
-        // Store parameter data
-        // Implementation depends on specific phase type
+        // Read indices line (3 integers)
+        auto indices = readTokens(file);
+        std::cerr << "\n";
+
+        // Check if this looks like mixing param indices (should be 3 integers)
+        // or if it's actually the magnetic params line (1 small integer)
+        if (indices.size() == 1) {
+            // This might be magnetic params count, not mixing indices
+            // Check if it's a small integer (magnetic params are typically 0 or small)
+            try {
+                int val = std::stoi(indices[0]);
+                if (val <= 10) {  // Likely magnetic params count, not mixing index
+                    // Handle magnetic params
+                    for (int j = 0; j < val; ++j) {
+                        readTokens(file);  // indices
+                        readDoubles(file, 6);  // values
+                    }
+                    break;  // Exit mixing params loop
+                }
+            } catch (...) {}
+        }
+
+        if (indices.size() < 3) {
+            break;
+        }
+
+        // Read 6 coefficient values
+        auto values = readDoubles(file, 6);
+
+        if (values.size() < 6) {
+            break;
+        }
+
+        ++paramsRead;
         ++p.nParamCS;
+    }
+
+    // If we read all expected params, look for magnetic params line
+    if (paramsRead == nParams) {
+        auto magTokens = readTokens(file);
+        std::cerr << "\n";
+
+        if (!magTokens.empty()) {
+            try {
+                int nMagParams = std::stoi(magTokens[0]);
+                for (int i = 0; i < nMagParams; ++i) {
+                    readTokens(file);  // indices
+                    readDoubles(file, 6);  // values
+                }
+            } catch (...) {}
+        }
     }
 
     p.nParamPhaseCS(phaseIndex + 1) = p.nParamCS;
@@ -558,6 +649,21 @@ std::vector<std::string> ChemSageParser::readTokens(std::ifstream& file) {
         std::istringstream iss(line);
         std::string token;
         while (iss >> token) {
+            tokens.push_back(token);
+        }
+    }
+
+    return tokens;
+}
+
+std::vector<std::string> ChemSageParser::readTokens(std::ifstream& file, int count) {
+    std::vector<std::string> tokens;
+    std::string line;
+
+    while (static_cast<int>(tokens.size()) < count && std::getline(file, line)) {
+        std::istringstream iss(line);
+        std::string token;
+        while (iss >> token && static_cast<int>(tokens.size()) < count) {
             tokens.push_back(token);
         }
     }

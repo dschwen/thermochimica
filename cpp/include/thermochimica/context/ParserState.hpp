@@ -16,7 +16,7 @@ struct ParserState {
     static constexpr int kMaxSublattice = 5;
     static constexpr int kNumSolnTypeSupport = 10;
     static constexpr int kNumGibbsCoeff = 13;
-    static constexpr int kMaxGibbsEqs = 6;
+    static constexpr int kMaxGibbsEqs = 10;  // Increased from 6 to handle more equations
     static constexpr int kParamMax = 4;
 
     // Supported phase type names
@@ -29,6 +29,8 @@ struct ParserState {
     int nElementsCS = 0;            ///< Number of elements parsed
     int nSpeciesCS = 0;             ///< Number of species parsed
     int nSolnPhasesSysCS = 0;       ///< Number of solution phases
+    int nSolnPhasesInFile = 0;      ///< Number of solution phases in file (before adjustment)
+    int iGasPhase = 0;              ///< Gas phase index (0 = no gas phase)
     int INFO = 0;                   ///< Parser status
     int iMiscSUBI = 0;              ///< SUBI miscibility flag
     int nParamCS = 0;               ///< Number of parameters

@@ -55,6 +55,9 @@ private:
     /// Read a line and parse tokens
     static std::vector<std::string> readTokens(std::ifstream& file);
 
+    /// Read tokens across multiple lines until count is reached
+    static std::vector<std::string> readTokens(std::ifstream& file, int count);
+
     /// Read a line and parse as doubles
     static std::vector<double> readDoubles(std::ifstream& file, int count);
 

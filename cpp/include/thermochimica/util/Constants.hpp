@@ -19,7 +19,7 @@ constexpr int kIterGlobalMax = 3000;              // Maximum GEM iterations
 
 // Gibbs energy coefficients
 constexpr int kNumGibbsCoeff = 13;                // Gibbs polynomial coefficients
-constexpr int kMaxGibbsEqs = 6;                   // Max Gibbs equations per species
+constexpr int kMaxGibbsEqs = 10;                  // Max Gibbs equations per species
 constexpr int kMaxParams = 4;                     // Max mixing parameters
 
 // Numerical constants

@@ -60,14 +60,14 @@ void checkSystem(ThermoContext& ctx) {
     auto& io = *ctx.io;
     auto& thermo = *ctx.thermo;
 
-    // Check temperature
-    if (io.dTemperature <= 0.0 || io.dTemperature > 10000.0) {
+    // Check temperature (must be positive, not NaN, and within bounds)
+    if (std::isnan(io.dTemperature) || io.dTemperature <= 0.0 || io.dTemperature > 10000.0) {
         io.INFOThermo = ErrorCode::kTemperatureOutOfRange;
         return;
     }
 
-    // Check pressure
-    if (io.dPressure <= 0.0 || io.dPressure > 1e10) {
+    // Check pressure (must be positive, not NaN, and within bounds)
+    if (std::isnan(io.dPressure) || io.dPressure <= 0.0 || io.dPressure > 1e10) {
         io.INFOThermo = ErrorCode::kPressureOutOfRange;
         return;
     }
@@ -76,6 +76,14 @@ void checkSystem(ThermoContext& ctx) {
     if (thermo.nSpecies == 0) {
         io.INFOThermo = ErrorCode::kNoSpeciesInSystem;
         return;
+    }
+
+    // Check element masses - must not be NaN or negative
+    for (int i = 0; i < Constants::kMaxIsotopes; ++i) {
+        if (std::isnan(io.dElementMass[i]) || io.dElementMass[i] < 0.0) {
+            io.INFOThermo = ErrorCode::kCompositionOutOfRange;
+            return;
+        }
     }
 
     // Check that at least one element has mass
