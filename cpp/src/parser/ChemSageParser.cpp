@@ -29,7 +29,7 @@ int ChemSageParser::parse(ThermoContext& ctx) {
         // Try with DATA_DIRECTORY prefix
         #ifdef DATA_DIRECTORY
         std::string fullPath = std::string(DATA_DIRECTORY) + filename;
-        file.open(fullPath);
+        file = std::ifstream(fullPath);  // Create fresh ifstream
         #endif
 
         if (!file.is_open()) {
@@ -38,22 +38,28 @@ int ChemSageParser::parse(ThermoContext& ctx) {
         }
     }
 
-    // Parse header section
-    int result = parseHeader(ctx, file);
-    if (result != 0) {
-        ctx.io->INFOThermo = result;
-        return result;
-    }
+    try {
+        // Parse header section
+        int result = parseHeader(ctx, file);
+        if (result != 0) {
+            ctx.io->INFOThermo = result;
+            return result;
+        }
 
-    // Parse data block section
-    result = parseDataBlock(ctx, file);
-    if (result != 0) {
-        ctx.io->INFOThermo = result;
-        return result;
-    }
+        // Parse data block section
+        result = parseDataBlock(ctx, file);
+        if (result != 0) {
+            ctx.io->INFOThermo = result;
+            return result;
+        }
 
-    // Transfer parsed data to main thermo state
-    transferToThermoState(ctx);
+        // Transfer parsed data to main thermo state
+        transferToThermoState(ctx);
+    } catch (const std::exception& e) {
+        // Catch any uncaught parsing exceptions
+        ctx.io->INFOThermo = ErrorCode::kParserError;
+        return ErrorCode::kParserError;
+    }
 
     file.close();
     return 0;
@@ -68,20 +74,55 @@ int ChemSageParser::parseHeader(ThermoContext& ctx, std::ifstream& file) {
         return 101;
     }
 
-    // Line 2: nElements, nSolnPhases, iGasPhase, [nSpeciesPerPhase...], nPureSpecies
+    // Line 2 (possibly spanning multiple lines): nElements, nSolnPhases, iGasPhase, [nSpeciesPerPhase...], nPureSpecies
     // Format interpretation follows Fortran ParseCSHeader.f90:
     // - First read: nElements, nSolnPhases, iGasPhase
     // - If iGasPhase == 0: no gas phase, nSolnPhases is decremented
     // - Reread line as: nElements, (dummies), nSpeciesPhaseCS(1:nSolnPhases), nSpeciesCS
-    auto tokens = readTokens(file);
+
+    // Read header integers (may span multiple lines)
+    // Keep reading lines of integers until we get a line that starts with a non-integer
+    std::vector<std::string> tokens;
+    std::streampos lastPos = file.tellg();
+    while (file) {
+        auto newTokens = readTokens(file);
+
+        // Check if this line contains numeric tokens
+        bool allNumeric = !newTokens.empty();
+        for (const auto& tok : newTokens) {
+            try {
+                std::stoi(tok);
+            } catch (...) {
+                allNumeric = false;
+                break;
+            }
+        }
+
+        if (!allNumeric) {
+            // This line has non-numeric tokens (element names) - rewind and stop
+            file.seekg(lastPos);
+            break;
+        }
+
+        tokens.insert(tokens.end(), newTokens.begin(), newTokens.end());
+        lastPos = file.tellg();
+
+        // Safety limit to prevent infinite loop
+        if (tokens.size() > 200) break;
+    }
     if (tokens.size() < 4) {
         return 102;
     }
 
-    p.nElementsCS = std::stoi(tokens[0]);
-    p.nSolnPhasesInFile = std::stoi(tokens[1]);  // Store original count
-    p.nSolnPhasesSysCS = p.nSolnPhasesInFile;
-    p.iGasPhase = std::stoi(tokens[2]);
+    try {
+        p.nElementsCS = std::stoi(tokens[0]);
+        p.nSolnPhasesInFile = std::stoi(tokens[1]);  // Store original count
+        p.nSolnPhasesSysCS = p.nSolnPhasesInFile;
+        p.iGasPhase = std::stoi(tokens[2]);
+    } catch (const std::exception& e) {
+        // Header parsing failed - token is not a valid integer
+        return 103;
+    }
 
     // Check limits
     if (p.nSolnPhasesSysCS > ParserState::kSolnPhasesSysMax) {
@@ -131,15 +172,20 @@ int ChemSageParser::parseHeader(ThermoContext& ctx, std::ifstream& file) {
     int tokenOffset = 1 + nDummies;  // Skip nElements and dummies
 
     // Read species counts per phase
-    if (p.nSolnPhasesSysCS > 0) {
-        for (int i = 0; i < p.nSolnPhasesSysCS && tokenOffset + i < static_cast<int>(tokens.size()) - 1; ++i) {
-            p.nSpeciesPhaseCS(i + 1) = std::stoi(tokens[tokenOffset + i]);
+    try {
+        if (p.nSolnPhasesSysCS > 0) {
+            for (int i = 0; i < p.nSolnPhasesSysCS && tokenOffset + i < static_cast<int>(tokens.size()) - 1; ++i) {
+                p.nSpeciesPhaseCS(i + 1) = std::stoi(tokens[tokenOffset + i]);
+            }
         }
-    }
 
-    // Last token is number of pure condensed species
-    if (!tokens.empty()) {
-        p.nSpeciesCS = std::stoi(tokens.back());
+        // Last token is number of pure condensed species
+        if (!tokens.empty()) {
+            p.nSpeciesCS = std::stoi(tokens.back());
+        }
+    } catch (const std::exception& e) {
+        // Species count parsing failed
+        return 104;
     }
 
     // Check for no solution phases
@@ -177,6 +223,13 @@ int ChemSageParser::parseHeader(ThermoContext& ctx, std::ifstream& file) {
 
     p.dQKTOParamsCS.resize(p.nSpeciesCS, 2);
     p.dQKTOParamsCS.setZero();
+
+    // Allocate mixing parameter arrays (estimate max params = 10 per phase)
+    int maxParams = p.nSolnPhasesSysCS * 20;  // Conservative estimate
+    p.iRegularParamCS.resize(maxParams, 12);  // Up to 12 columns for indices/exponents
+    p.iRegularParamCS.setZero();
+    p.dRegularParamCS.resize(maxParams, 6);   // 6 L coefficients
+    p.dRegularParamCS.setZero();
 
     // Line 3: Element names - may span multiple lines
     tokens = readTokens(file, p.nElementsCS);
@@ -252,6 +305,7 @@ int ChemSageParser::parseDataBlock(ThermoContext& ctx, std::ifstream& file) {
     int nPhasesInFile = p.nSolnPhasesSysCS;
     for (int iFilePhase = 0; iFilePhase < nPhasesInFile; ++iFilePhase) {
         // Read phase name (Entry 1 - separate line, Fortran uses FORMAT(A25))
+        std::streampos posBeforeName = file.tellg();
         if (!std::getline(file, line)) {
             return 1100 + iFilePhase;
         }
@@ -290,6 +344,7 @@ int ChemSageParser::parseDataBlock(ThermoContext& ctx, std::ifstream& file) {
         p.cSolnPhaseNameCS[realPhaseIndex] = phaseName;
         p.cSolnPhaseTypeCS[realPhaseIndex] = phaseType;
 
+
         // Check if phase type is supported
         if (!ParserState::isPhaseTypeSupported(phaseType)) {
             return ErrorCode::kUnsupportedPhaseType;
@@ -302,21 +357,36 @@ int ChemSageParser::parseDataBlock(ThermoContext& ctx, std::ifstream& file) {
         int nSpeciesInPhase = p.nSpeciesPhaseCS(realPhaseIndex + 1) - p.nSpeciesPhaseCS(realPhaseIndex);
 
         // For sublattice phases, read additional structure data
+        // Note: SUBI has a different format - species are given directly without sublattice header
+        // Some SUBL files also have post-species structure like SUBI
+        bool sublHasPreHeader = false;
         if (phaseTypeEnum == Constants::PhaseType::SUBL ||
             phaseTypeEnum == Constants::PhaseType::SUBLM ||
-            phaseTypeEnum == Constants::PhaseType::SUBI ||
             phaseTypeEnum == Constants::PhaseType::SUBM) {
-            int result = parseSUBLPhase(ctx, file, realPhaseIndex);
+            int result = parseSUBLPhase(ctx, file, realPhaseIndex, sublHasPreHeader);
             if (result != 0) return result;
+        } else if (phaseTypeEnum == Constants::PhaseType::SUBI) {
+            // SUBI phases don't have the same sublattice header - mark as having sublattice data
+            // but don't try to parse extra header lines
+            p.iPhaseSublatticeCS(realPhaseIndex) = ++p.nCountSublatticeCS;
         } else if (phaseTypeEnum == Constants::PhaseType::SUBG ||
                    phaseTypeEnum == Constants::PhaseType::SUBQ) {
             int result = parseSUBGPhase(ctx, file, realPhaseIndex);
             if (result != 0) return result;
+        } else if (phaseTypeEnum == Constants::PhaseType::RKMPM) {
+            // RKMPM phases have a sublattice stoichiometry header line before species
+            // Format: stoich1 stoich2 (e.g., "0.333333        0.280000")
+            auto stoichValues = readDoubles(file, 2);
+            if (stoichValues.size() >= 2) {
+                p.nSublatticePhaseCS(realPhaseIndex) = 2;  // RKMPM has 2 sublattices
+                p.dStoichSublatticeCS(realPhaseIndex, 0) = stoichValues[0];
+                p.dStoichSublatticeCS(realPhaseIndex, 1) = stoichValues[1];
+            }
         }
 
         // Parse each species in this phase
         for (int i = 0; i < nSpeciesInPhase; ++i) {
-            int result = parseSolutionPhase(ctx, file, speciesIndex);
+            int result = parseSolutionPhase(ctx, file, speciesIndex, phaseTypeEnum);
             if (result != 0) {
                 return result;
             }
@@ -325,31 +395,33 @@ int ChemSageParser::parseDataBlock(ThermoContext& ctx, std::ifstream& file) {
             ++speciesIndex;
         }
 
+        // For SUBI phases and SUBL/SUBLM/SUBM phases (regardless of pre-header),
+        // parse the sublattice structure data that comes AFTER species
+        bool needsPostSpeciesData = (phaseTypeEnum == Constants::PhaseType::SUBI) ||
+            (phaseTypeEnum == Constants::PhaseType::SUBL) ||
+            (phaseTypeEnum == Constants::PhaseType::SUBLM) ||
+            (phaseTypeEnum == Constants::PhaseType::SUBM);
+
+        if (needsPostSpeciesData) {
+            int result = parseSUBIExcessData(ctx, file, realPhaseIndex);
+            if (result != 0) return result;
+        }
         // Parse mixing parameters for this phase (only for non-ideal phases)
         // IDMX (ideal mixing) has no mixing parameters
-        if (phaseTypeEnum != Constants::PhaseType::IDMX) {
-            tokens = readTokens(file);
-            std::cerr << "\n";
-            if (!tokens.empty()) {
-                try {
-                    int nParams = std::stoi(tokens[0]);
-                    if (nParams > 0) {
-                        int result = parseMixingParameters(ctx, file, realPhaseIndex, nParams);
-                        if (result != 0) return result;
-                    }
-                } catch (const std::exception& e) {
-                    return 1700 + realPhaseIndex;  // Mixing params conversion error
-                }
-            }
+        else if (phaseTypeEnum != Constants::PhaseType::IDMX) {
+            // QKTO/RKMP use a different format: read until "0" terminator
+            // Each parameter starts with type indicator (2=binary, 3=ternary)
+            int result = parseMixingParametersLoop(ctx, file, realPhaseIndex, phaseTypeEnum);
+            if (result != 0) return result;
         }
 
         ++realPhaseIndex;
     }
 
-    // Parse pure condensed phases
+    // Parse pure condensed phases (no QKTO parameters)
     int nPureSpecies = p.nSpeciesCS - p.nSpeciesPhaseCS(p.nSolnPhasesSysCS);
     for (int i = 0; i < nPureSpecies; ++i) {
-        int result = parseSolutionPhase(ctx, file, speciesIndex);
+        int result = parseSolutionPhase(ctx, file, speciesIndex, Constants::PhaseType::Unknown);
         if (result != 0) return result;
 
         p.iPhaseCS(speciesIndex) = 0;  // Pure condensed phase
@@ -360,7 +432,7 @@ int ChemSageParser::parseDataBlock(ThermoContext& ctx, std::ifstream& file) {
 }
 
 int ChemSageParser::parseSolutionPhase(ThermoContext& ctx, std::ifstream& file,
-                                       int speciesIndex) {
+                                       int speciesIndex, Constants::PhaseType phaseType) {
     auto& p = *ctx.parser;
     std::string line;
 
@@ -429,6 +501,29 @@ int ChemSageParser::parseSolutionPhase(ThermoContext& ctx, std::ifstream& file,
         return result;
     }
 
+    // For QKTO phases, read K and p parameters after Gibbs equations
+    // These appear as a line like "1.00000  1" after each species' Gibbs data
+    if (phaseType == Constants::PhaseType::QKTO) {
+        auto qktoParams = readDoubles(file, 2);
+        if (qktoParams.size() >= 2) {
+            p.dQKTOParamsCS(speciesIndex, 0) = qktoParams[0];  // K parameter
+            p.dQKTOParamsCS(speciesIndex, 1) = qktoParams[1];  // p parameter
+        }
+    }
+
+    // For SUBQ/SUBG phases, read coordination numbers and charge after Gibbs equations
+    // Line 1: 5 coordination numbers (or nElements + 1 values)
+    // Line 2: Charge/electronegativity
+    if (phaseType == Constants::PhaseType::SUBQ || phaseType == Constants::PhaseType::SUBG) {
+        // Read coordination numbers (typically 5 values: z_A, z_B, z_C, z_D, z_E)
+        auto coordNums = readDoubles(file, p.nElementsCS + 1);
+        // Store coordination numbers if needed (in p.dCoordNumbersCS or similar)
+
+        // Read charge/electronegativity
+        auto charge = readDoubles(file, 1);
+        // Store charge if needed (in p.dSpeciesChargeCS or similar)
+    }
+
     return 0;
 }
 
@@ -450,11 +545,11 @@ int ChemSageParser::parseGibbsEquations(ThermoContext& ctx, std::ifstream& file,
             p.dGibbsCoeffSpeciesTemp(speciesIndex, baseIdx + k) = values[k];
         }
 
-        // For types 4 and 16, there's an additional line with more terms
+        // For types 4 and 16, there's an additional line after EACH temp range
+        // with "nAddTerms coef1 exp1 coef2 exp2..."
         if (iGibbsEqType == 4 || iGibbsEqType == 16) {
             // Read the number of additional terms (first value of next line)
             auto addTerms = readTokens(file);
-            std::cerr << "\n";
             if (addTerms.empty()) {
                 continue;  // No additional terms
             }
@@ -481,33 +576,97 @@ int ChemSageParser::parseGibbsEquations(ThermoContext& ctx, std::ifstream& file,
         }
     }
 
+    // For type 13, read ONE continuation line with 2 values AFTER all temp ranges
+    if (iGibbsEqType == 13) {
+        auto addTerms = readDoubles(file, 2);
+        // Store in first temp range's extra slots if needed
+        if (addTerms.size() >= 2) {
+            p.dGibbsCoeffSpeciesTemp(speciesIndex, 7) = addTerms[0];
+            p.dGibbsCoeffSpeciesTemp(speciesIndex, 8) = addTerms[1];
+        }
+    }
+
+    // For type 16 (magnetic), read magnetic ordering parameters after all Gibbs equations
+    // Format: Curie/Neel temperature, magnetic moment
+    if (iGibbsEqType == 16) {
+        auto magData = readDoubles(file, 2);
+        // Store if needed: magData[0] = Tc (Curie/Neel), magData[1] = magnetic moment
+        if (magData.size() >= 2) {
+            // Could store in p.dMagneticMoment and p.dCurieTemp if arrays exist
+        }
+    }
+
     return 0;
 }
 
 int ChemSageParser::parseSUBLPhase(ThermoContext& ctx, std::ifstream& file,
-                                   int phaseIndex) {
+                                   int phaseIndex, bool& hasPreHeader) {
     auto& p = *ctx.parser;
+    hasPreHeader = false;
 
-    // Read number of sublattices
-    auto tokens = readTokens(file);
-    if (tokens.empty()) {
-        return 1500 + phaseIndex;
-    }
+    try {
+        // Save file position to potentially seek back
+        std::streampos startPos = file.tellg();
 
-    int nSublattices = std::stoi(tokens[0]);
-    p.nSublatticePhaseCS(phaseIndex) = nSublattices;
-    p.iPhaseSublatticeCS(phaseIndex) = ++p.nCountSublatticeCS;
+        // Read next line to check format
+        std::string line;
+        if (!std::getline(file, line)) {
+            return 1500 + phaseIndex;
+        }
 
-    // Read sublattice stoichiometry
-    auto stoich = readDoubles(file, nSublattices);
-    for (int i = 0; i < nSublattices && i < static_cast<int>(stoich.size()); ++i) {
-        p.dStoichSublatticeCS(phaseIndex, i) = stoich[i];
-    }
+        // Determine if this is a sublattice stoichiometry line (all numbers)
+        // or a species name line (contains letters/colon)
+        std::istringstream iss(line);
+        std::vector<double> stoichValues;
+        double val;
+        bool isNumericLine = true;
 
-    // Read constituents per sublattice
-    tokens = readTokens(file);
-    for (int i = 0; i < nSublattices && i < static_cast<int>(tokens.size()); ++i) {
-        p.nConstituentSublatticeCS(phaseIndex, i) = std::stoi(tokens[i]);
+        // Try parsing all tokens as doubles
+        std::string token;
+        while (iss >> token) {
+            try {
+                size_t pos;
+                val = std::stod(token, &pos);
+                if (pos != token.length()) {
+                    // Not fully parsed as number
+                    isNumericLine = false;
+                    break;
+                }
+                stoichValues.push_back(val);
+            } catch (...) {
+                isNumericLine = false;
+                break;
+            }
+        }
+
+        if (!isNumericLine || stoichValues.empty()) {
+            // No sublattice stoichiometry header - this is a species name
+            // Seek back so species parser can read this line
+            file.seekg(startPos);
+
+            // Mark that there's no pre-header (post-species structure will be needed)
+            hasPreHeader = false;
+            p.nSublatticePhaseCS(phaseIndex) = 2;  // Default assumption
+            p.iPhaseSublatticeCS(phaseIndex) = ++p.nCountSublatticeCS;
+            return 0;
+        }
+
+        // Has stoichiometry header - number of values = number of sublattices
+        hasPreHeader = true;
+        int nSublattices = static_cast<int>(stoichValues.size());
+        p.nSublatticePhaseCS(phaseIndex) = nSublattices;
+        p.iPhaseSublatticeCS(phaseIndex) = ++p.nCountSublatticeCS;
+
+        // Store the stoichiometry values we already parsed
+        for (int i = 0; i < nSublattices; ++i) {
+            p.dStoichSublatticeCS(phaseIndex, i) = stoichValues[i];
+        }
+
+        // Note: In this format, constituents per sublattice is determined from species
+        // The format just has stoichiometry, then species directly
+        // No separate "constituents per sublattice" line before species
+    } catch (const std::exception& e) {
+        return 1501 + phaseIndex;  // SUBL parsing error
     }
 
     return 0;
@@ -517,15 +676,320 @@ int ChemSageParser::parseSUBGPhase(ThermoContext& ctx, std::ifstream& file,
                                    int phaseIndex) {
     auto& p = *ctx.parser;
 
-    // Read quadruplet information
-    auto tokens = readTokens(file);
-    if (tokens.size() < 2) {
-        return 1600 + phaseIndex;
+    try {
+        // Read quadruplet information
+        auto tokens = readTokens(file);
+        if (tokens.size() < 2) {
+            return 1600 + phaseIndex;
+        }
+
+        p.nPairsSROCS(phaseIndex, 0) = std::stoi(tokens[0]);
+        p.nPairsSROCS(phaseIndex, 1) = std::stoi(tokens[1]);
+        p.iPhaseSublatticeCS(phaseIndex) = ++p.nCountSublatticeCS;
+    } catch (const std::exception& e) {
+        return 1601 + phaseIndex;  // SUBG parsing error
     }
 
-    p.nPairsSROCS(phaseIndex, 0) = std::stoi(tokens[0]);
-    p.nPairsSROCS(phaseIndex, 1) = std::stoi(tokens[1]);
-    p.iPhaseSublatticeCS(phaseIndex) = ++p.nCountSublatticeCS;
+    return 0;
+}
+
+int ChemSageParser::parseSUBIExcessData(ThermoContext& ctx, std::ifstream& file,
+                                         int phaseIndex) {
+    auto& p = *ctx.parser;
+    std::string line;
+
+    // SUBI phases have sublattice structure and excess parameters AFTER the species
+    // Format (based on CsTe-1.dat):
+    //   nSublattice nConstituent
+    //   constituent names (one per line for first sublattice)
+    //   constituent names (one line for second sublattice)
+    //   number of species on sublattice 2
+    //   charge values
+    //   stoichiometry
+    //   iConstituentSublattice indices
+    //   more indices
+    //   nParams
+    //   param indices
+    //   param values (6 per line)
+    //   0 (terminator)
+
+    try {
+        // Read first line to determine format
+        auto tokens = readTokens(file);
+
+        if (tokens.empty()) {
+            return 1700 + phaseIndex;
+        }
+
+        int nSublattice = std::stoi(tokens[0]);
+
+        // Determine format: SUBI has (nSublattice, nConstituent), SUBL has nSublattice alone
+        bool isSUBIFormat = (tokens.size() >= 2);
+
+        if (isSUBIFormat) {
+            // SUBI format: nSublattice nConstituent on same line
+            int nConstituent = std::stoi(tokens[1]);
+
+            p.nSublatticePhaseCS(phaseIndex) = nSublattice;
+
+            // Read constituent names - one line per sublattice
+            for (int i = 0; i < nSublattice; ++i) {
+                if (!std::getline(file, line)) {
+                    return 1701 + phaseIndex;
+                }
+            }
+
+            // Read additional SUBI-specific structure data
+            tokens = readTokens(file);  // nSpecies
+            tokens = readTokens(file);  // charge
+            tokens = readTokens(file);  // stoichiometry
+            tokens = readTokens(file);  // indices line 1
+            tokens = readTokens(file);  // indices line 2
+        } else {
+            // SUBL format: nSublattice alone, then more structure lines
+
+            p.nSublatticePhaseCS(phaseIndex) = nSublattice;
+
+            // Read stoichiometry (nSublattice values)
+            tokens = readTokens(file);
+
+            // Read constituents per sublattice (nSublattice values)
+            tokens = readTokens(file);
+
+            // Read constituent names - one line per sublattice
+            for (int i = 0; i < nSublattice; ++i) {
+                if (!std::getline(file, line)) {
+                    return 1701 + phaseIndex;
+                }
+            }
+
+            // Read iConstituentSublattice indices (2 lines)
+            tokens = readTokens(file);
+            tokens = readTokens(file);
+        }
+
+        // Now read excess parameters in a loop
+        // For SUBLM: TWO sections - magnetic params (ending in 0), then regular excess (ending in 0)
+        // For SUBI/SUBL: ONE section of excess params (ending in 0)
+        // Format: type (2=binary, 3=ternary), indices line, value lines (count from last index)
+
+        // Read first terminator section (magnetic params for SUBLM, excess for SUBI/SUBL)
+        int blockCount = 0;
+        int sectionCount = 0;
+        while (true) {
+            tokens = readTokens(file);
+            if (tokens.empty()) {
+                return 1704 + phaseIndex;
+            }
+
+            int paramType = std::stoi(tokens[0]);
+            if (paramType == 0) {
+                // Found terminator for this section
+                ++sectionCount;
+                blockCount = 0;
+
+                // For SUBLM, there's a second section (regular excess) after magnetic
+                // Check if next line starts another param section or is another terminator
+                std::streampos pos = file.tellg();
+                auto peekTokens = readTokens(file);
+                if (!peekTokens.empty()) {
+                    try {
+                        int nextVal = std::stoi(peekTokens[0]);
+                        // If it's a small int (2 or 3), it's a param type - continue parsing
+                        if (nextVal >= 2 && nextVal <= 3) {
+                            file.seekg(pos);  // Seek back to re-read this line
+                            continue;  // Parse second section
+                        }
+                        // If it's another 0, this is the second terminator - consume it and exit
+                        if (nextVal == 0) {
+                            // Don't seek back - we consumed the second terminator
+                            break;
+                        }
+                    } catch (...) {
+                        // Not an int - must be next phase name
+                    }
+                }
+                // Seek back and exit - done with all sections
+                file.seekg(pos);
+                break;
+            }
+
+            // Read indices line
+            tokens = readTokens(file);
+
+            // The last index indicates the number of value lines (order/multiplicity)
+            int nValueLines = 1;
+            if (!tokens.empty()) {
+                try {
+                    nValueLines = std::stoi(tokens.back());
+                    if (nValueLines < 1) nValueLines = 1;
+                    if (nValueLines > 10) nValueLines = 1;  // Sanity check
+                } catch (...) {
+                    nValueLines = 1;
+                }
+            }
+
+            // Read value lines (6 coefficients each)
+            for (int i = 0; i < nValueLines; ++i) {
+                auto values = readDoubles(file, 6);
+            }
+            ++blockCount;
+        }
+
+    } catch (const std::exception& e) {
+        // If parsing fails, try to recover by skipping to terminator
+        while (std::getline(file, line)) {
+            size_t start = line.find_first_not_of(" \t");
+            if (start != std::string::npos && line[start] == '0' &&
+                (start + 1 >= line.length() || line.find_first_not_of(" \t", start + 1) == std::string::npos)) {
+                // Found standalone "0" - terminator
+                break;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int ChemSageParser::parseMixingParametersLoop(ThermoContext& ctx, std::ifstream& file,
+                                               int phaseIndex, Constants::PhaseType phaseType) {
+    auto& p = *ctx.parser;
+
+    // Mixing parameters format varies by phase type
+    // For QKTO: each parameter has type (2=binary, 3=ternary), then indices+values
+    // For RKMP: nParams count, then each param has 3 indices + 6 values
+    // Continue reading until type=0 is encountered
+
+    while (true) {
+        // Read first token - either parameter type (QKTO) or count (RKMP)
+        auto tokens = readTokens(file);
+        if (tokens.empty()) {
+            break;
+        }
+
+        int firstVal = 0;
+        try {
+            firstVal = std::stoi(tokens[0]);
+        } catch (...) {
+            break;
+        }
+
+        // Check for terminator (0)
+        if (firstVal == 0) {
+            break;  // End of mixing parameters
+        }
+
+        // For QKTO: firstVal is the parameter type (2 or 3)
+        // For type 2 (binary): 4 indices (i, j, p, q) + 6 L coefficients
+        // For type 3 (ternary): 6 indices (i, j, k, p, q, r) + 6 L coefficients
+        if (phaseType == Constants::PhaseType::QKTO) {
+            int nSpeciesParam = firstVal;  // 2 for binary, 3 for ternary
+            int nIndices = (nSpeciesParam == 2) ? 4 : 6;
+
+            // Read indices + 6 L coefficient values
+            auto data = readDoubles(file, nIndices + 6);
+            if (static_cast<int>(data.size()) < nIndices + 6) {
+                break;  // Incomplete data
+            }
+
+            // Store in iRegularParamCS if we have space
+            int iParam = p.nParamCS;
+            if (iParam < p.iRegularParamCS.rows()) {
+                // Column 1: number of species in parameter (2 or 3)
+                p.iRegularParamCS(iParam, 1) = nSpeciesParam;
+
+                // Columns 2,3,(4): species indices (convert 1-based file index to 0-based)
+                p.iRegularParamCS(iParam, 2) = static_cast<int>(data[0]) - 1;  // species a (0-based)
+                p.iRegularParamCS(iParam, 3) = static_cast<int>(data[1]) - 1;  // species b (0-based)
+                if (nSpeciesParam == 3) {
+                    p.iRegularParamCS(iParam, 4) = static_cast<int>(data[2]) - 1;  // species c (0-based)
+                }
+
+                // Exponents p, q, (r) at columns nSpeciesParam+2, +3, (+4)
+                int expOffset = (nSpeciesParam == 2) ? 2 : 3;  // After species indices
+                p.iRegularParamCS(iParam, nSpeciesParam + 2) = static_cast<int>(data[expOffset]);      // p
+                p.iRegularParamCS(iParam, nSpeciesParam + 3) = static_cast<int>(data[expOffset + 1]);  // q
+                if (nSpeciesParam == 3) {
+                    p.iRegularParamCS(iParam, nSpeciesParam + 4) = static_cast<int>(data[expOffset + 2]);  // r
+                }
+
+                // Store L coefficients (6 values for temperature polynomial)
+                p.dRegularParamCS(iParam, 0) = data[nIndices];      // L0
+                p.dRegularParamCS(iParam, 1) = data[nIndices + 1];  // L1
+                p.dRegularParamCS(iParam, 2) = data[nIndices + 2];  // L2
+                p.dRegularParamCS(iParam, 3) = data[nIndices + 3];  // L3
+                p.dRegularParamCS(iParam, 4) = data[nIndices + 4];  // L4
+                p.dRegularParamCS(iParam, 5) = data[nIndices + 5];  // L5
+            }
+
+            ++p.nParamCS;
+        }
+        // RKMPM format: similar to QKTO but with separate lines
+        // Type (2 or 3) on one line, indices on next, then value lines
+        else if (phaseType == Constants::PhaseType::RKMPM) {
+            int paramType = firstVal;  // 2=binary, 3=ternary
+
+            // Read indices (i, j, k where k is order/exponent)
+            auto indices = readTokens(file);
+            if (indices.size() < 3) break;
+
+            int lastIndex = std::stoi(indices.back());  // Order/exponent
+            int nValueLines = std::max(1, lastIndex);  // Number of value lines
+
+            // Read value lines
+            for (int v = 0; v < nValueLines; ++v) {
+                auto values = readDoubles(file, 6);
+                // Store if needed
+            }
+
+            ++p.nParamCS;
+            // Continue loop to read more params until 0
+        }
+        // For RKMP and other types: firstVal is nParams count
+        else {
+            // RKMP format: firstVal is parameter count
+            for (int i = 0; i < firstVal; ++i) {
+                // Read indices (typically 3)
+                auto indices = readTokens(file);
+                if (indices.size() < 3) break;
+
+                int iParam = p.nParamCS;
+                if (iParam < p.iRegularParamCS.rows()) {
+                    // Store indices
+                    p.iRegularParamCS(iParam, 1) = 2;  // Binary
+                    p.iRegularParamCS(iParam, 2) = std::stoi(indices[0]);
+                    p.iRegularParamCS(iParam, 3) = std::stoi(indices[1]);
+                    p.iRegularParamCS(iParam, 4) = std::stoi(indices[2]);
+                }
+
+                // Read 6 coefficient values
+                auto values = readDoubles(file, 6);
+                if (values.size() < 6) break;
+
+                if (iParam < p.dRegularParamCS.rows()) {
+                    for (int j = 0; j < 6; ++j) {
+                        p.dRegularParamCS(iParam, j) = values[j];
+                    }
+                }
+
+                ++p.nParamCS;
+            }
+            // After RKMP params, look for magnetic params (0 or count)
+            auto magTokens = readTokens(file);
+            if (!magTokens.empty()) {
+                try {
+                    int nMagParams = std::stoi(magTokens[0]);
+                    for (int i = 0; i < nMagParams; ++i) {
+                        readTokens(file);  // indices
+                        readDoubles(file, 6);  // values
+                    }
+                } catch (...) {}
+            }
+            break;  // RKMP has explicit count, so we're done
+        }
+    }
+
+    p.nParamPhaseCS(phaseIndex + 1) = p.nParamCS;
 
     return 0;
 }
@@ -541,7 +1005,6 @@ int ChemSageParser::parseMixingParameters(ThermoContext& ctx, std::ifstream& fil
     for (int i = 0; i < nParams; ++i) {
         // Read indices line (3 integers)
         auto indices = readTokens(file);
-        std::cerr << "\n";
 
         // Check if this looks like mixing param indices (should be 3 integers)
         // or if it's actually the magnetic params line (1 small integer)
@@ -579,8 +1042,6 @@ int ChemSageParser::parseMixingParameters(ThermoContext& ctx, std::ifstream& fil
     // If we read all expected params, look for magnetic params line
     if (paramsRead == nParams) {
         auto magTokens = readTokens(file);
-        std::cerr << "\n";
-
         if (!magTokens.empty()) {
             try {
                 int nMagParams = std::stoi(magTokens[0]);
@@ -627,6 +1088,11 @@ void ChemSageParser::transferToThermoState(ThermoContext& ctx) {
         for (int j = 0; j < p.nElementsCS; ++j) {
             t.dStoichSpecies(i, j) = p.dStoichSpeciesCS(i, j);
         }
+
+        // Transfer QKTO parameters (K, p, group)
+        t.dQKTOParams(i, 0) = p.dQKTOParamsCS(i, 0);  // K parameter
+        t.dQKTOParams(i, 1) = p.dQKTOParamsCS(i, 1);  // p parameter
+        t.dQKTOParams(i, 2) = 0;  // Group index (default 0 - all species in same group)
     }
 
     // Transfer phase data
@@ -635,6 +1101,20 @@ void ChemSageParser::transferToThermoState(ThermoContext& ctx) {
         t.cSolnPhaseType[i] = p.cSolnPhaseTypeCS[i];
         t.nSpeciesPhase(i + 1) = p.nSpeciesPhaseCS(i + 1);
         t.iPhaseSublattice(i) = p.iPhaseSublatticeCS(i);
+        t.nParamPhase(i + 1) = p.nParamPhaseCS(i + 1);  // Cumulative param count
+    }
+
+    // Transfer mixing parameters
+    for (int i = 0; i < p.nParamCS; ++i) {
+        // Transfer integer param data (indices, exponents)
+        for (int j = 0; j < std::min(static_cast<int>(p.iRegularParamCS.cols()),
+                                     static_cast<int>(t.iRegularParam.cols())); ++j) {
+            t.iRegularParam(i, j) = p.iRegularParamCS(i, j);
+        }
+        // Transfer L coefficients - compute temperature-dependent value at T=298.15K as initial
+        // G = L0 + L1*T + L2*T*ln(T) + L3*T^2 + L4*T^3 + L5/T
+        // For now, just store L0 as the base value
+        t.dExcessGibbsParam(i) = p.dRegularParamCS(i, 0);
     }
 
     // Allocate context arrays

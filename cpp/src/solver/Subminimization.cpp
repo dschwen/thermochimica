@@ -15,13 +15,15 @@ namespace Thermochimica {
 void compExcessGibbsEnergy(ThermoContext& ctx, int phaseIndex);
 
 /// @brief Compute chemical potentials of solution phase constituents
+/// @param iFirst 0-based first species index (inclusive)
+/// @param iLast 0-based last species index (exclusive)
 static void subMinChemicalPotential(ThermoContext& ctx, int iSolnPhaseIndex,
                                     int iFirst, int iLast) {
     auto& thermo = *ctx.thermo;
     auto& gem = *ctx.gem;
 
     // Initialize chemical potentials
-    for (int i = iFirst; i <= iLast; ++i) {
+    for (int i = iFirst; i < iLast; ++i) {
         thermo.dChemicalPotential[i] = 0.0;
         gem.dPartialExcessGibbs[i] = 0.0;
     }
@@ -47,6 +49,8 @@ static double subMinDrivingForce(ThermoContext& ctx, int iFirst, int iLast,
 }
 
 /// @brief Compute functional norm for convergence testing
+/// @param iFirst 0-based first species index (inclusive)
+/// @param iLast 0-based last species index (exclusive)
 static double subMinFunctionNorm(ThermoContext& ctx, int iSolnPhaseIndex,
                                  int iFirst, int iLast) {
     auto& thermo = *ctx.thermo;
@@ -55,14 +59,14 @@ static double subMinFunctionNorm(ThermoContext& ctx, int iSolnPhaseIndex,
     double dSubMinFunctionNorm = -1.0;
 
     // Compute residual of mole fractions
-    for (int i = iFirst; i <= iLast; ++i) {
+    for (int i = iFirst; i < iLast; ++i) {
         dSubMinFunctionNorm += thermo.dMolFraction[i];
     }
 
     // Compute residual of charge neutrality constraints if ionic
     if (thermo.iPhaseElectronID[iSolnPhaseIndex] != 0) {
         int j = thermo.iPhaseElectronID[iSolnPhaseIndex];
-        for (int i = iFirst; i <= iLast; ++i) {
+        for (int i = iFirst; i < iLast; ++i) {
             dSubMinFunctionNorm += thermo.dMolFraction[i] * thermo.dStoichSpecies(i, j);
         }
     }
@@ -174,7 +178,7 @@ static void subMinLineSearch(ThermoContext& ctx, int iSolnPhaseIndex,
     for (int k = 0; k < 5; ++k) {
         // Check minimum mole fraction
         double minMolFrac = thermo.dMolFraction[iFirst];
-        for (int i = iFirst + 1; i <= iLast; ++i) {
+        for (int i = iFirst + 1; i < iLast; ++i) {
             minMolFrac = std::min(minMolFrac, thermo.dMolFraction[i]);
         }
         if (minMolFrac < dMinMoleFraction) break;
@@ -257,10 +261,12 @@ bool subminimization(ThermoContext& ctx, int iSolnPhaseIndex) {
     bool lDuplicate = false;
     bool lSubMinConverged = false;
 
-    // Initialize indices
-    int iFirst = thermo.nSpeciesPhase[iSolnPhaseIndex - 1] + 1;
+    // Initialize indices (0-based, half-open interval [iFirst, iLast))
+    // nSpeciesPhase is cumulative: for phase p, species are at indices
+    // nSpeciesPhase[p-1] to nSpeciesPhase[p]-1 (0-based)
+    int iFirst = thermo.nSpeciesPhase[iSolnPhaseIndex - 1];
     int iLast = thermo.nSpeciesPhase[iSolnPhaseIndex];
-    int nVar = iLast - iFirst + 1;
+    int nVar = iLast - iFirst;
 
     // Initialize chemical potential star vector
     std::vector<double> dChemicalPotentialStar(nVar, 0.0);
@@ -324,7 +330,7 @@ bool subminimization(ThermoContext& ctx, int iSolnPhaseIndex) {
 
         // Check minimum mole fraction
         double minMolFrac = thermo.dMolFraction[iFirst];
-        for (int i = iFirst + 1; i <= iLast; ++i) {
+        for (int i = iFirst + 1; i < iLast; ++i) {
             minMolFrac = std::min(minMolFrac, thermo.dMolFraction[i]);
         }
         if (minMolFrac < dMinMoleFraction) break;

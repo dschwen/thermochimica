@@ -8,6 +8,19 @@
 
 namespace Thermochimica {
 
+/// @brief Check if a species is feasible (contains only active elements)
+static bool speciesIsFeasibleForDF(ThermoContext& ctx, int speciesIdx) {
+    auto& thermo = *ctx.thermo;
+    int nEl = thermo.nElements - thermo.nChargedConstraints;
+
+    for (int j = 0; j < nEl; ++j) {
+        if (thermo.dStoichSpecies(speciesIdx, j) > 0.0 && thermo.dMolesElement(j) <= 0.0) {
+            return false;  // Species contains an element not in the input
+        }
+    }
+    return true;
+}
+
 /// @brief Compute driving forces for all unstable solution phases
 /// @details For each solution phase not currently in the assemblage,
 /// estimates optimal mole fractions and computes the driving force
@@ -32,12 +45,25 @@ static void computeSolutionPhaseDrivingForces(ThermoContext& ctx) {
             continue;
         }
 
-        // For each species, compute mu* from element potentials
+        // Build list of feasible species for this phase
+        std::vector<int> feasibleSpecies;
+        for (int i = iFirst; i < iLast; ++i) {
+            if (speciesIsFeasibleForDF(ctx, i)) {
+                feasibleSpecies.push_back(i);
+            }
+        }
+
+        if (feasibleSpecies.empty()) {
+            gem.dDrivingForceSoln(iPhase) = 0.0;  // No feasible species
+            continue;
+        }
+
+        // For each feasible species, compute mu* from element potentials
         // and estimate optimal mole fractions
         double sumExp = 0.0;
         std::vector<double> expVal(iLast - iFirst, 0.0);
 
-        for (int i = iFirst; i < iLast; ++i) {
+        for (int i : feasibleSpecies) {
             // Compute chemical potential from element potentials
             // mu*_i = sum_j (lambda_j * a_ij) / n_i
             double muStar = 0.0;
@@ -62,7 +88,7 @@ static void computeSolutionPhaseDrivingForces(ThermoContext& ctx) {
         double drivingForce = 0.0;
 
         if (sumExp > 1e-300) {
-            for (int i = iFirst; i < iLast; ++i) {
+            for (int i : feasibleSpecies) {
                 double x = expVal[i - iFirst] / sumExp;
                 if (x > 1e-300) {
                     // Compute chemical potential from element potentials
@@ -89,7 +115,6 @@ static void computeSolutionPhaseDrivingForces(ThermoContext& ctx) {
         // Store driving force (negative = favorable)
         // The check function looks for drivingForce > tolerance, so we negate
         gem.dDrivingForceSoln(iPhase) = -drivingForce;
-
     }
 }
 
@@ -135,24 +160,36 @@ void PhaseAssemblage::check(ThermoContext& ctx) {
         gem.iterStep = 10;
     }
 
-    // Only check periodically to avoid oscillation
-    if (gem.iterGlobal - gem.iterLast < gem.iterStep * 2) {
+    // Check phase stability - allow Newton solver to converge before adding phases
+    // This prevents premature phase additions with incorrect element potentials
+    // which causes oscillation between phases
+    int checkInterval = (gem.iterGlobal < 100) ? 50 : gem.iterStep * 5;
+    if (gem.iterGlobal - gem.iterLast < checkInterval) {
         return;
     }
 
     // Compute driving forces for all unstable solution phases
     computeSolutionPhaseDrivingForces(ctx);
 
-    // Check solution phases
+    // Find phase with highest driving force (most favorable to add)
+    int bestPhase = -1;
+    double bestDF = thermo.tolerances[kTolDrivingForce];
     for (int iPhase = 0; iPhase < thermo.nSolnPhasesSys; ++iPhase) {
         if (gem.lSolnPhases[iPhase]) {
             continue;  // Already stable
         }
 
         double drivingForce = gem.dDrivingForceSoln(iPhase);
-        if (drivingForce > thermo.tolerances[kTolDrivingForce]) {
-            // Try to add the solution phase
-            if (addSolnPhase(ctx, iPhase)) {
+        if (drivingForce > bestDF) {
+            bestDF = drivingForce;
+            bestPhase = iPhase;
+        }
+    }
+
+    // Try to add the best phase
+    if (bestPhase >= 0) {
+        // Try to add the solution phase
+            if (addSolnPhase(ctx, bestPhase)) {
                 gem.iterLast = gem.iterGlobal;
                 gem.iterLastSoln = gem.iterGlobal;
                 return;
@@ -185,18 +222,17 @@ void PhaseAssemblage::check(ThermoContext& ctx) {
                 }
 
                 // If solution phase has better driving force than worst pure phase, swap
-                if (worstPhaseIdx >= 0 && drivingForce > -worstDF) {
+                if (worstPhaseIdx >= 0 && bestDF > -worstDF) {
                     int removedSpecies = thermo.iAssemblage(worstPhaseIdx) - 1;
                     removePureConPhase(ctx, removedSpecies);
 
-                    if (addSolnPhase(ctx, iPhase)) {
+                    if (addSolnPhase(ctx, bestPhase)) {
                         gem.iterLast = gem.iterGlobal;
                         gem.iterLastSoln = gem.iterGlobal;
                         return;
                     }
                 }
             }
-        }
     }
 
     // Check pure condensed phases
@@ -221,12 +257,33 @@ void PhaseAssemblage::check(ThermoContext& ctx) {
     }
 }
 
+/// @brief Check if a species is feasible (contains only active elements)
+static bool speciesIsFeasibleForPhase(ThermoContext& ctx, int speciesIdx) {
+    auto& thermo = *ctx.thermo;
+    int nEl = thermo.nElements - thermo.nChargedConstraints;
+
+    for (int j = 0; j < nEl; ++j) {
+        if (thermo.dStoichSpecies(speciesIdx, j) > 0.0 && thermo.dMolesElement(j) <= 0.0) {
+            return false;  // Species contains an element not in the input
+        }
+    }
+    return true;
+}
+
 bool PhaseAssemblage::addSolnPhase(ThermoContext& ctx, int phaseIndex) {
     auto& gem = *ctx.gem;
     auto& thermo = *ctx.thermo;
 
-    // Check phase rule
-    if (thermo.nConPhases + thermo.nSolnPhases >= thermo.nElements - thermo.nChargedConstraints) {
+    // Count active elements (with non-zero input)
+    int nActiveElements = 0;
+    for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+        if (thermo.dMolesElement(j) > 0.0) {
+            ++nActiveElements;
+        }
+    }
+
+    // Check phase rule: max phases = active components
+    if (thermo.nConPhases + thermo.nSolnPhases >= nActiveElements) {
         return false;  // Would violate phase rule
     }
 
@@ -235,9 +292,30 @@ bool PhaseAssemblage::addSolnPhase(ThermoContext& ctx, int phaseIndex) {
     int newIdx = thermo.nElements - thermo.nSolnPhases;
     thermo.iAssemblage(newIdx) = -(phaseIndex + 1);
 
+    // Get species range for this phase
+    int iFirst = (phaseIndex > 0) ? thermo.nSpeciesPhase(phaseIndex) : 0;
+    int iLast = thermo.nSpeciesPhase(phaseIndex + 1);
+
+    // Build list of feasible species (only contain active elements)
+    std::vector<int> feasibleSpecies;
+    for (int i = iFirst; i < iLast; ++i) {
+        if (speciesIsFeasibleForPhase(ctx, i)) {
+            feasibleSpecies.push_back(i);
+        }
+    }
+
+    if (feasibleSpecies.empty()) {
+        // No feasible species - remove the phase we just added
+        thermo.nSolnPhases--;
+        thermo.iAssemblage(newIdx) = 0;
+        return false;
+    }
+
     // Estimate initial moles based on mass balance requirements
-    // First, compute what the pure phases provide
+    // First, compute what the existing phases (pure + solution) provide
     Eigen::VectorXd accountedMass = Eigen::VectorXd::Zero(thermo.nElements);
+
+    // Pure condensed phases
     for (int i = 0; i < thermo.nConPhases; ++i) {
         int speciesIdx = thermo.iAssemblage(i) - 1;
         if (speciesIdx >= 0 && speciesIdx < thermo.nSpecies) {
@@ -247,22 +325,57 @@ bool PhaseAssemblage::addSolnPhase(ThermoContext& ctx, int phaseIndex) {
         }
     }
 
-    // Compute deficit for each element
-    Eigen::VectorXd deficit = Eigen::VectorXd::Zero(thermo.nElements);
-    for (int j = 0; j < thermo.nElements; ++j) {
-        deficit(j) = std::max(0.0, thermo.dMolesElement(j) - accountedMass(j));
+    // Already-stable solution phases (nSolnPhases-1 because we just incremented for the new phase)
+    for (int iPhase = 0; iPhase < thermo.nSolnPhases - 1; ++iPhase) {
+        int assembIdx = thermo.nElements - (thermo.nSolnPhases - 1) + iPhase;
+        int solnIdx = -thermo.iAssemblage(assembIdx) - 1;
+        if (solnIdx < 0 || solnIdx >= thermo.nSolnPhasesSys) continue;
+
+        int iFirst = (solnIdx > 0) ? thermo.nSpeciesPhase(solnIdx) : 0;
+        int iLast = thermo.nSpeciesPhase(solnIdx + 1);
+        double phaseMoles = thermo.dMolesPhase(assembIdx);
+
+        for (int i = iFirst; i < iLast; ++i) {
+            if (thermo.dMolFraction(i) > 0) {
+                for (int j = 0; j < thermo.nElements; ++j) {
+                    accountedMass(j) += phaseMoles * thermo.dMolFraction(i) * thermo.dStoichSpecies(i, j);
+                }
+            }
+        }
     }
 
-    // Estimate moles needed based on expected dominant species (e.g., CO2)
-    // Use a simple heuristic: divide by average stoichiometry of deficient elements
-    double initialMoles = 0.1;
-    int iFirst = (phaseIndex > 0) ? thermo.nSpeciesPhase(phaseIndex) : 0;
-    int iLast = thermo.nSpeciesPhase(phaseIndex + 1);
+    // Compute deficit for each element
+    Eigen::VectorXd deficit = Eigen::VectorXd::Zero(thermo.nElements);
+    double totalDeficit = 0.0;
+    for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+        if (thermo.dMolesElement(j) > 0.0) {
+            deficit(j) = std::max(0.0, thermo.dMolesElement(j) - accountedMass(j));
+            totalDeficit += deficit(j);
+        }
+    }
 
-    // Find the species with lowest chemical potential (most stable)
-    int bestSpecies = iFirst;
+    // If there's no mass deficit, the new phase isn't needed
+    if (totalDeficit < thermo.tolerances[kTolPhaseMoles]) {
+        // Phase not needed - remove it
+        thermo.nSolnPhases--;
+        thermo.iAssemblage(newIdx) = 0;
+        gem.lSolnPhases[phaseIndex] = false;
+        // Also unmark miscibility partners
+        for (int p = 0; p < thermo.nSolnPhasesSys; ++p) {
+            if (thermo.cSolnPhaseName[p] == thermo.cSolnPhaseName[phaseIndex]) {
+                gem.lSolnPhases[p] = false;
+            }
+        }
+        return false;
+    }
+
+    // Estimate moles needed based on expected dominant species
+    double initialMoles = 0.1;
+
+    // Find the feasible species with lowest chemical potential (most stable)
+    int bestSpecies = feasibleSpecies[0];
     double bestMu = std::numeric_limits<double>::max();
-    for (int i = iFirst; i < iLast; ++i) {
+    for (int i : feasibleSpecies) {
         double muStd = thermo.dStdGibbsEnergy(i) /
                       (Constants::kIdealGasConstant * ctx.io->dTemperature);
         if (muStd < bestMu) {
@@ -282,84 +395,126 @@ bool PhaseAssemblage::addSolnPhase(ThermoContext& ctx, int phaseIndex) {
     thermo.dMolesPhase(newIdx) = initialMoles;
 
     // Initialize mole fractions for species in this phase
-    // Use optimal mole fractions from element potentials
-    // (iFirst and iLast already computed above)
+    // Use overall composition as starting point (not element potentials,
+    // which can give degenerate solutions like pure end-members)
 
-    double sumExp = 0.0;
-    std::vector<double> expVal(iLast - iFirst, 0.0);
-
-    for (int i = iFirst; i < iLast; ++i) {
-        // Compute mu* from element potentials
-        double muStar = 0.0;
-        for (int j = 0; j < thermo.nElements; ++j) {
-            muStar += thermo.dElementPotential(j) * thermo.dStoichSpecies(i, j);
+    // First, compute total active element moles
+    double totalActiveMoles = 0.0;
+    for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+        if (thermo.dMolesElement(j) > 0.0) {
+            totalActiveMoles += thermo.dMolesElement(j);
         }
-        muStar /= static_cast<double>(thermo.iParticlesPerMole(i));
-
-        // Standard Gibbs energy (normalized by RT)
-        double muStd = thermo.dStdGibbsEnergy(i) /
-                      (Constants::kIdealGasConstant * ctx.io->dTemperature);
-
-        // Optimal mole fraction estimate
-        double arg = muStar - muStd;
-        arg = std::max(-100.0, std::min(100.0, arg));
-        expVal[i - iFirst] = std::exp(arg);
-        sumExp += expVal[i - iFirst];
     }
 
-    // Normalize mole fractions and set species moles
-    if (sumExp > 1e-300) {
+    // Initialize mole fractions based on system composition
+    // For each feasible species, estimate its contribution based on
+    // how well it matches the overall composition
+    std::vector<double> moleFracs(iLast - iFirst, 1e-100);
+    double sumFrac = 0.0;
+
+    for (int i : feasibleSpecies) {
+        // Sum the stoichiometry for active elements
+        double stoichSum = 0.0;
+        for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+            if (thermo.dMolesElement(j) > 0.0) {
+                stoichSum += thermo.dStoichSpecies(i, j);
+            }
+        }
+
+        if (stoichSum > 0) {
+            // Weight by how much of the system this species could represent
+            double weight = 0.0;
+            for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+                if (thermo.dMolesElement(j) > 0.0 && thermo.dStoichSpecies(i, j) > 0) {
+                    // Mole fraction based on element j
+                    weight += (thermo.dMolesElement(j) / totalActiveMoles) *
+                              (thermo.dStoichSpecies(i, j) / stoichSum);
+                }
+            }
+            moleFracs[i - iFirst] = std::max(weight, 1e-10);
+            sumFrac += moleFracs[i - iFirst];
+        }
+    }
+
+    // Normalize mole fractions
+    if (sumFrac > 1e-300) {
         for (int i = iFirst; i < iLast; ++i) {
-            double x = expVal[i - iFirst] / sumExp;
-            x = std::max(x, 1e-100);  // Minimum mole fraction
-            thermo.dMolFraction(i) = x;
-            thermo.dMolesSpecies(i) = initialMoles * x;
+            thermo.dMolFraction(i) = moleFracs[i - iFirst] / sumFrac;
+            thermo.dMolesSpecies(i) = initialMoles * thermo.dMolFraction(i);
         }
     } else {
-        // Equal mole fractions as fallback
-        int nSpecies = iLast - iFirst;
+        // Fallback: equal mole fractions among feasible species
+        int nFeasible = static_cast<int>(feasibleSpecies.size());
         for (int i = iFirst; i < iLast; ++i) {
-            thermo.dMolFraction(i) = 1.0 / nSpecies;
-            thermo.dMolesSpecies(i) = initialMoles / nSpecies;
+            thermo.dMolFraction(i) = 1e-100;
+            thermo.dMolesSpecies(i) = initialMoles * 1e-100;
+        }
+        if (nFeasible > 0) {
+            double x = 1.0 / nFeasible;
+            for (int i : feasibleSpecies) {
+                thermo.dMolFraction(i) = x;
+                thermo.dMolesSpecies(i) = initialMoles * x;
+            }
         }
     }
 
     // Mark phase as stable
     gem.lSolnPhases[phaseIndex] = true;
 
+    // Also mark the paired miscibility phase (if any) as stable
+    // This prevents the solver from trying to add both miscibility partners
+    // which would cause one to have zero moles and get removed
+    for (int p = 0; p < thermo.nSolnPhasesSys; ++p) {
+        if (p != phaseIndex &&
+            thermo.cSolnPhaseName[p] == thermo.cSolnPhaseName[phaseIndex]) {
+            gem.lSolnPhases[p] = true;
+        }
+    }
+
     // Now solve for phase moles that satisfy mass balance
     // Build stoichiometry matrix for current assemblage (pure + solution phases)
-    int nPhases = thermo.nConPhases + 1;  // +1 for the just-added solution phase
-    int nEl = thermo.nElements - thermo.nChargedConstraints;
+    int nPhasesTotal = thermo.nConPhases + 1;  // +1 for the just-added solution phase
 
-    if (nPhases == nEl) {
+    // Count active elements and build list
+    std::vector<int> activeElementList;
+    for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+        if (thermo.dMolesElement(j) > 0.0) {
+            activeElementList.push_back(j);
+        }
+    }
+    int nActiveEl = static_cast<int>(activeElementList.size());
+
+    if (nPhasesTotal == nActiveEl) {
         // Square system - can solve directly
-        Eigen::MatrixXd stoichMat = Eigen::MatrixXd::Zero(nEl, nPhases);
-        Eigen::VectorXd targetMoles = Eigen::VectorXd::Zero(nEl);
+        Eigen::MatrixXd stoichMat = Eigen::MatrixXd::Zero(nActiveEl, nPhasesTotal);
+        Eigen::VectorXd targetMoles = Eigen::VectorXd::Zero(nActiveEl);
 
         // Pure condensed phases
         for (int p = 0; p < thermo.nConPhases; ++p) {
             int speciesIdx = thermo.iAssemblage(p) - 1;
             if (speciesIdx >= 0 && speciesIdx < thermo.nSpecies) {
-                for (int j = 0; j < nEl; ++j) {
-                    stoichMat(j, p) = thermo.dStoichSpecies(speciesIdx, j);
+                for (int jRed = 0; jRed < nActiveEl; ++jRed) {
+                    int jFull = activeElementList[jRed];
+                    stoichMat(jRed, p) = thermo.dStoichSpecies(speciesIdx, jFull);
                 }
             }
         }
 
         // Solution phase (use average stoichiometry weighted by mole fractions)
-        for (int j = 0; j < nEl; ++j) {
+        for (int jRed = 0; jRed < nActiveEl; ++jRed) {
+            int jFull = activeElementList[jRed];
             double avgStoich = 0.0;
             for (int i = iFirst; i < iLast; ++i) {
                 if (thermo.dMolFraction(i) > 0) {
-                    avgStoich += thermo.dMolFraction(i) * thermo.dStoichSpecies(i, j);
+                    avgStoich += thermo.dMolFraction(i) * thermo.dStoichSpecies(i, jFull);
                 }
             }
-            stoichMat(j, thermo.nConPhases) = avgStoich;
+            stoichMat(jRed, thermo.nConPhases) = avgStoich;
         }
 
-        for (int j = 0; j < nEl; ++j) {
-            targetMoles(j) = thermo.dMolesElement(j);
+        for (int jRed = 0; jRed < nActiveEl; ++jRed) {
+            int jFull = activeElementList[jRed];
+            targetMoles(jRed) = thermo.dMolesElement(jFull);
         }
 
         // Solve stoichMat @ phaseMoles = targetMoles
@@ -373,7 +528,25 @@ bool PhaseAssemblage::addSolnPhase(ThermoContext& ctx, int phaseIndex) {
                 thermo.dMolesSpecies(speciesIdx) = thermo.dMolesPhase(p);
             }
         }
-        thermo.dMolesPhase(newIdx) = std::max(1e-10, phaseMoles(thermo.nConPhases));
+
+        // Check if the new phase would have significant moles
+        // If the stoichiometry solve gives zero moles, the phase isn't needed
+        double newPhaseMoles = phaseMoles(thermo.nConPhases);
+        if (newPhaseMoles < thermo.tolerances[kTolPhaseMoles] * 10.0) {
+            // Phase not needed - remove it
+            thermo.nSolnPhases--;
+            thermo.iAssemblage(newIdx) = 0;
+            gem.lSolnPhases[phaseIndex] = false;
+            // Also unmark miscibility partners
+            for (int p = 0; p < thermo.nSolnPhasesSys; ++p) {
+                if (thermo.cSolnPhaseName[p] == thermo.cSolnPhaseName[phaseIndex]) {
+                    gem.lSolnPhases[p] = false;
+                }
+            }
+            return false;
+        }
+
+        thermo.dMolesPhase(newIdx) = std::max(1e-10, newPhaseMoles);
 
         // Update species moles for solution phase
         for (int i = iFirst; i < iLast; ++i) {
@@ -432,8 +605,16 @@ bool PhaseAssemblage::addPureConPhase(ThermoContext& ctx, int speciesIndex) {
     auto& gem = *ctx.gem;
     auto& thermo = *ctx.thermo;
 
-    // Check phase rule
-    if (thermo.nConPhases + thermo.nSolnPhases >= thermo.nElements - thermo.nChargedConstraints) {
+    // Count active elements (with non-zero input)
+    int nActiveElements = 0;
+    for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+        if (thermo.dMolesElement(j) > 0.0) {
+            ++nActiveElements;
+        }
+    }
+
+    // Check phase rule: max phases = active components
+    if (thermo.nConPhases + thermo.nSolnPhases >= nActiveElements) {
         return false;
     }
 
@@ -492,11 +673,6 @@ bool PhaseAssemblage::removePureConPhase(ThermoContext& ctx, int speciesIndex) {
     thermo.nConPhases--;
 
     return true;
-}
-
-void PhaseAssemblage::swapPhases(ThermoContext& ctx) {
-    // Placeholder for phase swapping logic
-    // This handles cases where one phase should replace another
 }
 
 void PhaseAssemblage::revert(ThermoContext& ctx) {

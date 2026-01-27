@@ -23,7 +23,6 @@ namespace Thermochimica {
 static void polyRegularQKTO(ThermoContext& ctx, int iSolnIndex, int iParam) {
     auto& thermo = *ctx.thermo;
     auto& gem = *ctx.gem;
-    auto& io = *ctx.io;
 
     int iFirst = thermo.nSpeciesPhase[iSolnIndex - 1] + 1;
     int iLast = thermo.nSpeciesPhase[iSolnIndex];
@@ -55,17 +54,27 @@ static void polyRegularQKTO(ThermoContext& ctx, int iSolnIndex, int iParam) {
     }
 
     // Get chemical groups of first two species
-    int iGroup1 = static_cast<int>(thermo.dQKTOParams(thermo.nSpeciesPhase[iSolnIndex - 1] + a, 2));
-    int iGroup2 = static_cast<int>(thermo.dQKTOParams(thermo.nSpeciesPhase[iSolnIndex - 1] + b, 2));
+    // a, b are now 0-based within phase; nSpeciesPhase[iSolnIndex - 1] is cumulative count
+    int globalA = thermo.nSpeciesPhase[iSolnIndex - 1] + a;
+    int globalB = thermo.nSpeciesPhase[iSolnIndex - 1] + b;
+
+    int iGroup1 = static_cast<int>(thermo.dQKTOParams(globalA, 2));
+    int iGroup2 = static_cast<int>(thermo.dQKTOParams(globalB, 2));
 
     // Calculate symmetry of all species with these first two
-    lAsymmetric1[a] = true;
-    lAsymmetric2[b] = true;
+    // Note: a, b, c are 0-based, but local arrays y, lAsymmetric use 1-based indexing
+    int a1 = a + 1;  // Convert to 1-based for local array access
+    int b1 = b + 1;
+    int c1 = c + 1;  // c is 0 if binary, so c1 would be 1 (unused for binary)
+
+    lAsymmetric1[a1] = true;
+    lAsymmetric2[b1] = true;
 
     // Check symmetry and handle interpolation overrides
     for (int j = thermo.nSpeciesPhase[iSolnIndex - 1] + 1;
          j <= thermo.nSpeciesPhase[iSolnIndex]; ++j) {
         int i = j - thermo.nSpeciesPhase[iSolnIndex - 1];
+        int j0 = j - 1;  // 0-based index for array access
 
         // Check if this ternary is an exception
         bool lIsException = false;
@@ -94,7 +103,7 @@ static void polyRegularQKTO(ThermoContext& ctx, int iSolnIndex, int iParam) {
 
         // If groups are unequal, assign asymmetry based on chemical group
         if (iGroup1 != iGroup2) {
-            int iGroupTemp = static_cast<int>(thermo.dQKTOParams(j, 2));
+            int iGroupTemp = static_cast<int>(thermo.dQKTOParams(j0, 2));
             if (iGroupTemp == iGroup1) {
                 lAsymmetric1[i] = true;
             } else if (iGroupTemp == iGroup2) {
@@ -104,10 +113,11 @@ static void polyRegularQKTO(ThermoContext& ctx, int iSolnIndex, int iParam) {
     }
 
     // Compute sum of equivalent fractions
+    // Note: j is 1-based loop counter (Fortran style), use j-1 for 0-based array access
     for (int j = thermo.nSpeciesPhase[iSolnIndex - 1] + 1;
          j <= thermo.nSpeciesPhase[iSolnIndex]; ++j) {
-        int i = j - thermo.nSpeciesPhase[iSolnIndex - 1];
-        xT += thermo.dMolFraction[j] * thermo.dQKTOParams(j, 1);
+        int j0 = j - 1;  // 0-based index for array access
+        xT += thermo.dMolFraction[j0] * thermo.dQKTOParams(j0, 1);
     }
 
     if (xT <= 0.0) return;
@@ -116,7 +126,8 @@ static void polyRegularQKTO(ThermoContext& ctx, int iSolnIndex, int iParam) {
     for (int j = thermo.nSpeciesPhase[iSolnIndex - 1] + 1;
          j <= thermo.nSpeciesPhase[iSolnIndex]; ++j) {
         int i = j - thermo.nSpeciesPhase[iSolnIndex - 1];
-        y[i] = thermo.dMolFraction[j] * thermo.dQKTOParams(j, 1) / xT;
+        int j0 = j - 1;  // 0-based index for array access
+        y[i] = thermo.dMolFraction[j0] * thermo.dQKTOParams(j0, 1) / xT;
     }
 
     // Calculate xis
@@ -134,32 +145,34 @@ static void polyRegularQKTO(ThermoContext& ctx, int iSolnIndex, int iParam) {
 
     // For ternary parameters, enforce symmetric treatment
     if (nSpeciesParam == 3) {
-        dXi1 = y[a];
-        dXi2 = y[b];
-        dXiDen = y[a] + y[b] + y[c];
+        c1 = c + 1;  // Update c1 for ternary case
+        dXi1 = y[a1];
+        dXi2 = y[b1];
+        dXiDen = y[a1] + y[b1] + y[c1];
         // Force reset of all symmetry arrays
         std::fill(lAsymmetric1.begin(), lAsymmetric1.end(), false);
         std::fill(lAsymmetric2.begin(), lAsymmetric2.end(), false);
-        lAsymmetric1[a] = true;
-        lAsymmetric2[b] = true;
+        lAsymmetric1[a1] = true;
+        lAsymmetric2[b1] = true;
     }
 
     // Calculate g^excess for binary part
     double dGex = thermo.dExcessGibbsParam[iParam] *
                   std::pow(dXi1, p - 1) * std::pow(dXi2, q - 1) /
                   std::pow(dXiDen, p + q + r - nSpeciesParam);
-    dGex *= y[a] * y[b] * xT;
+    dGex *= y[a1] * y[b1] * xT;
 
     // Include ternary factor if present
     if (nSpeciesParam == 3) {
-        dGex *= std::pow(y[c], r - 1);
-        dGex *= y[c];
+        dGex *= std::pow(y[c1], r - 1);
+        dGex *= y[c1];
     }
 
     // Compute partial derivatives
     for (int j = thermo.nSpeciesPhase[iSolnIndex - 1] + 1;
          j <= thermo.nSpeciesPhase[iSolnIndex]; ++j) {
         int i = j - thermo.nSpeciesPhase[iSolnIndex - 1];
+        int j0 = j - 1;  // 0-based index for array access
         double dDgex = -1.0 / xT;
 
         if (lAsymmetric1[i]) {
@@ -168,23 +181,23 @@ static void polyRegularQKTO(ThermoContext& ctx, int iSolnIndex, int iParam) {
             dDgex += (q - 1) / dXi2 - (p + q + r - nSpeciesParam) / dXiDen;
         }
 
-        if (i == a) {
-            dDgex += 1.0 / y[a] / xT;
-        } else if (i == b) {
-            dDgex += 1.0 / y[b] / xT;
-        } else if (i == c) {
-            dDgex += 1.0 / y[c] / xT;
+        if (i == a1) {
+            dDgex += 1.0 / y[a1] / xT;
+        } else if (i == b1) {
+            dDgex += 1.0 / y[b1] / xT;
+        } else if (i == c1 && nSpeciesParam == 3) {
+            dDgex += 1.0 / y[c1] / xT;
         }
 
         // Ternary part of derivative
         if (nSpeciesParam == 3) {
             dDgex -= 1.0 / xT;
-            if (i == c) {
-                dDgex += (r - 1) / y[c] - (p + q + r - nSpeciesParam) / dXiDen;
+            if (i == c1) {
+                dDgex += (r - 1) / y[c1] - (p + q + r - nSpeciesParam) / dXiDen;
             }
         }
 
-        gem.dPartialExcessGibbs[j] += dDgex * dGex * thermo.dQKTOParams(j, 1);
+        gem.dPartialExcessGibbs[j0] += dDgex * dGex * thermo.dQKTOParams(j0, 1);
     }
 }
 
@@ -198,15 +211,20 @@ void compExcessGibbsEnergyQKTO(ThermoContext& ctx, int iSolnIndex) {
     auto& thermo = *ctx.thermo;
 
     // Return if no interaction parameters for this phase or wrong type
+    // Note: iSolnIndex is 1-based, but cSolnPhaseType is 0-based
     if ((thermo.nParamPhase[iSolnIndex] - thermo.nParamPhase[iSolnIndex - 1] == 0) ||
-        (thermo.cSolnPhaseType[iSolnIndex] != "QKTO")) {
+        (thermo.cSolnPhaseType[iSolnIndex - 1] != "QKTO")) {
         return;
     }
 
     // Loop through all interaction parameters in this phase
-    for (int iParam = thermo.nParamPhase[iSolnIndex - 1] + 1;
-         iParam <= thermo.nParamPhase[iSolnIndex]; ++iParam) {
+    // Note: nParamPhase is cumulative, use 0-based indexing for iParam
+    int iParamStart = (iSolnIndex > 1) ? thermo.nParamPhase[iSolnIndex - 1] : 0;
+    int iParamEnd = thermo.nParamPhase[iSolnIndex];
+
+    for (int iParam = iParamStart; iParam < iParamEnd; ++iParam) {
         // Compute partial molar excess Gibbs energy for each sub-system
+        // Pass iParam as 0-based index
         polyRegularQKTO(ctx, iSolnIndex, iParam);
     }
 }

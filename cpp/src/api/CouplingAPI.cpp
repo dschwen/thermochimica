@@ -1,5 +1,5 @@
 // C-compatible API for external coupling
-// Placeholder for C interface functions
+// Provides C interface functions for use from C code or other languages via FFI
 
 #include "thermochimica/Thermochimica.hpp"
 

@@ -107,6 +107,10 @@ void ThermoState::allocate(int numElements, int numSpecies, int numSolnPhases, i
     dStoichSpeciesUnFuzzed.resize(nSpecies, nElements);
     dStoichSpeciesUnFuzzed.setZero();
 
+    // QKTO parameters (3 columns: K, p, group)
+    dQKTOParams.resize(nSpecies, 3);
+    dQKTOParams.setZero();
+
     dAtomFractionSpecies.resize(nSpecies, nElements);
     dAtomFractionSpecies.setZero();
 

@@ -3,6 +3,7 @@
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include <vector>
 
 namespace Thermochimica {
 
@@ -85,9 +86,10 @@ void GEMLineSearch::init(ThermoContext& ctx, double& stepLength) {
         maxGamma = 0.25;
     }
 
+    // dUpdateVar is the Newton step (delta), not target values
     // Limit step based on element potential changes
     for (int i = 0; i < thermo.nElements; ++i) {
-        double change = std::abs(gem.dUpdateVar(i) - thermo.dElementPotential(i));
+        double change = std::abs(gem.dUpdateVar(i));  // This is the delta
         if (change > 1e-10) {
             double limit = maxGamma / change;
             stepLength = std::min(stepLength, limit);
@@ -102,32 +104,38 @@ void GEMLineSearch::init(ThermoContext& ctx, double& stepLength) {
         int idx = nElements + i;
         if (idx < gem.dUpdateVar.size()) {
             double molesCurrent = thermo.dMolesPhase(nElements - nSolnPhases + i);
-            double molesNew = gem.dUpdateVar(idx);
+            double molesDelta = gem.dUpdateVar(idx);  // This is the delta
 
             // Prevent phase moles from going negative
-            if (molesNew < 0 && molesCurrent > 0) {
-                double limit = 0.9 * molesCurrent / std::abs(molesNew - molesCurrent);
+            // new = current + step * delta
+            // want: current + step * delta >= 0
+            // if delta < 0: step <= current / |delta|
+            if (molesDelta < 0 && molesCurrent > 0) {
+                double limit = 0.9 * molesCurrent / std::abs(molesDelta);
                 stepLength = std::min(stepLength, limit);
             }
 
-            // Limit increase/decrease
-            double maxIncrease = 2.0;
-            double maxDecrease = 0.5;
-            if (gem.iterGlobal > 1000) {
-                maxIncrease = 1.5;
-                maxDecrease = 0.75;
+            // Limit large changes (both increase and decrease)
+            if (molesCurrent > 0) {
+                double maxChange = 0.3 * molesCurrent;  // Allow at most 30% change
+                if (std::abs(molesDelta) > maxChange) {
+                    double limit = maxChange / std::abs(molesDelta);
+                    stepLength = std::min(stepLength, limit);
+                }
             }
 
-            if (molesCurrent > 0 && molesNew > 0) {
-                double ratio = molesNew / molesCurrent;
-                if (ratio > maxIncrease) {
-                    stepLength = std::min(stepLength, (maxIncrease - 1.0) / (ratio - 1.0));
-                } else if (ratio < maxDecrease) {
-                    stepLength = std::min(stepLength, (1.0 - maxDecrease) / (1.0 - ratio));
-                }
+            // Also limit absolute growth to prevent runaway
+            // Don't allow phase moles to more than double in one iteration
+            if (molesDelta > 0) {
+                double maxGrowth = std::max(molesCurrent, 0.1);  // At most double, min 0.1
+                double limit = maxGrowth / molesDelta;
+                stepLength = std::min(stepLength, limit);
             }
         }
     }
+
+    // Absolute maximum step length constraint
+    stepLength = std::min(stepLength, 0.1);
 
     stepLength = std::max(stepLength, 1e-10);
 }
@@ -162,9 +170,11 @@ void GEMLineSearch::updateElementPotentials(ThermoContext& ctx, double stepLengt
     auto& gem = *ctx.gem;
     auto& thermo = *ctx.thermo;
 
+    // dUpdateVar contains the Newton step (delta), not the target value
+    // Apply: new = old + stepLength * delta
     for (int i = 0; i < thermo.nElements; ++i) {
-        double newVal = thermo.dElementPotential(i) +
-                       stepLength * (gem.dUpdateVar(i) - thermo.dElementPotential(i));
+        double oldVal = thermo.dElementPotential(i);
+        double newVal = oldVal + stepLength * gem.dUpdateVar(i);
         thermo.dElementPotential(i) = newVal;
     }
 }
@@ -177,14 +187,17 @@ void GEMLineSearch::updatePhaseMoles(ThermoContext& ctx, double stepLength) {
     int nSolnPhases = thermo.nSolnPhases;
     int nConPhases = thermo.nConPhases;
 
+    // dUpdateVar contains the Newton step (delta), not the target value
+    // Apply: new = old + stepLength * delta
+
     // Update solution phase moles
     for (int i = 0; i < nSolnPhases; ++i) {
         int updateIdx = nElements + i;
         int phaseIdx = nElements - nSolnPhases + i;
 
         if (updateIdx < gem.dUpdateVar.size() && phaseIdx < thermo.dMolesPhase.size()) {
-            double newMoles = thermo.dMolesPhase(phaseIdx) +
-                             stepLength * (gem.dUpdateVar(updateIdx) - thermo.dMolesPhase(phaseIdx));
+            double oldMoles = thermo.dMolesPhase(phaseIdx);
+            double newMoles = oldMoles + stepLength * gem.dUpdateVar(updateIdx);
             thermo.dMolesPhase(phaseIdx) = std::max(newMoles, 0.0);
         }
     }
@@ -194,7 +207,9 @@ void GEMLineSearch::updatePhaseMoles(ThermoContext& ctx, double stepLength) {
         int updateIdx = nElements + nSolnPhases + i;
 
         if (updateIdx < gem.dUpdateVar.size() && i < thermo.dMolesPhase.size()) {
-            thermo.dMolesPhase(i) = gem.dUpdateVar(updateIdx);
+            double oldMoles = thermo.dMolesPhase(i);
+            double newMoles = oldMoles + stepLength * gem.dUpdateVar(updateIdx);
+            thermo.dMolesPhase(i) = std::max(newMoles, 0.0);
         }
     }
 }
@@ -202,15 +217,24 @@ void GEMLineSearch::updatePhaseMoles(ThermoContext& ctx, double stepLength) {
 void GEMLineSearch::updateSpecies(ThermoContext& ctx) {
     auto& thermo = *ctx.thermo;
 
-    // Update species moles from phase moles and mole fractions
+    // Keep mole fractions FIXED for now.
+    // The mole fractions were initialized to match the overall system composition.
+    // Only update species moles = phase moles * mole fraction.
+    //
+    // This is a simplification - a proper GEM solver would update mole fractions
+    // based on element potentials, but that requires careful handling to maintain
+    // mass balance.
+
     for (int iPhase = 0; iPhase < thermo.nSolnPhases; ++iPhase) {
-        int phaseIdx = -thermo.iAssemblage(thermo.nElements - thermo.nSolnPhases + iPhase) - 1;
+        int assembIdx = thermo.nElements - thermo.nSolnPhases + iPhase;
+        int phaseIdx = -thermo.iAssemblage(assembIdx) - 1;
         if (phaseIdx < 0 || phaseIdx >= thermo.nSolnPhasesSys) continue;
 
         int iFirst = (phaseIdx > 0) ? thermo.nSpeciesPhase(phaseIdx) : 0;
         int iLast = thermo.nSpeciesPhase(phaseIdx + 1);
-        double phaseMoles = thermo.dMolesPhase(thermo.nElements - thermo.nSolnPhases + iPhase);
+        double phaseMoles = thermo.dMolesPhase(assembIdx);
 
+        // Update species moles from phase moles and FIXED mole fractions
         for (int i = iFirst; i < iLast; ++i) {
             if (thermo.dMolFraction(i) > 0) {
                 thermo.dMolesSpecies(i) = phaseMoles * thermo.dMolFraction(i);

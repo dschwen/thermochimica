@@ -96,6 +96,9 @@ void setPrintResultsMode(ThermoContext& ctx, int mode);
 /// Enable/disable JSON output
 void setWriteJSON(ThermoContext& ctx, bool enable);
 
+/// Enable/disable heat capacity, entropy, and enthalpy calculation
+void setHeatCapacityEntropyEnthalpy(ThermoContext& ctx, bool enable);
+
 // ============================================================================
 // Output Retrieval Functions
 // ============================================================================
@@ -235,6 +238,10 @@ void resetThermoAll(ThermoContext& ctx);
 
 /// Post-process results (compute Gibbs energy, prepare output arrays)
 void postProcess(ThermoContext& ctx);
+
+/// Compute heat capacity, entropy, and enthalpy
+/// Requires io.lHeatCapacityEntropyEnthalpy = true
+void computeHeatCapacity(ThermoContext& ctx);
 
 /// Print results to stdout
 void printResults(ThermoContext& ctx);

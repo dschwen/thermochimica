@@ -178,6 +178,20 @@ void compThermoData(ThermoContext& ctx) {
         thermo.dChemicalPotential(i) = G / (R * T);
     }
 
+    // Compute temperature-dependent excess Gibbs energy parameters
+    // G = L0 + L1*T + L2*T*ln(T) + L3*T^2 + L4*T^3 + L5/T
+    for (int i = 0; i < thermo.nParam; ++i) {
+        double L0 = parser.dRegularParamCS(i, 0);
+        double L1 = parser.dRegularParamCS(i, 1);
+        double L2 = parser.dRegularParamCS(i, 2);
+        double L3 = parser.dRegularParamCS(i, 3);
+        double L4 = parser.dRegularParamCS(i, 4);
+        double L5 = parser.dRegularParamCS(i, 5);
+
+        thermo.dExcessGibbsParam(i) = L0 + L1 * T + L2 * T * logT +
+                                      L3 * T * T + L4 * T * T * T + L5 / T;
+    }
+
     // Compute element amounts
     thermo.dMolesElement.setZero();
     for (int i = 0; i < Constants::kNumElementsPT; ++i) {
@@ -300,6 +314,10 @@ void setPrintResultsMode(ThermoContext& ctx, int mode) {
 
 void setWriteJSON(ThermoContext& ctx, bool enable) {
     ctx.io->lWriteJSON = enable;
+}
+
+void setHeatCapacityEntropyEnthalpy(ThermoContext& ctx, bool enable) {
+    ctx.io->lHeatCapacityEntropyEnthalpy = enable;
 }
 
 std::pair<double, int> getOutputChemPot(const ThermoContext& ctx,
@@ -584,7 +602,13 @@ void printResults(ThermoContext& ctx) {
 }
 
 void writeJSON(ThermoContext& ctx, bool append) {
-    // Placeholder - would write JSON output
+    (void)ctx;
+    (void)append;
+    static bool warned = false;
+    if (!warned) {
+        std::cerr << "Warning: writeJSON is not yet implemented\n";
+        warned = true;
+    }
 }
 
 int getAtomicNumber(const std::string& symbol) {

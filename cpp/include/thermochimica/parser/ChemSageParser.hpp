@@ -33,18 +33,28 @@ private:
                                    int speciesIndex, int nGibbsEqs, int iGibbsEqType);
 
     /// Parse solution phase data
+    /// @param phaseType Phase type (QKTO phases need K/p parameters)
     static int parseSolutionPhase(ThermoContext& ctx, std::ifstream& file,
-                                  int phaseIndex);
+                                  int speciesIndex, Constants::PhaseType phaseType);
 
     /// Parse SUBL/CEF phase specific data
+    /// @param hasPreHeader Output: true if stoichiometry header was found before species
     static int parseSUBLPhase(ThermoContext& ctx, std::ifstream& file,
-                              int phaseIndex);
+                              int phaseIndex, bool& hasPreHeader);
 
     /// Parse SUBG/MQM phase specific data
     static int parseSUBGPhase(ThermoContext& ctx, std::ifstream& file,
                               int phaseIndex);
 
-    /// Parse mixing parameters
+    /// Parse SUBI (ionic sublattice) excess data (comes after species)
+    static int parseSUBIExcessData(ThermoContext& ctx, std::ifstream& file,
+                                   int phaseIndex);
+
+    /// Parse mixing parameters (loop until terminator)
+    static int parseMixingParametersLoop(ThermoContext& ctx, std::ifstream& file,
+                                         int phaseIndex, Constants::PhaseType phaseType);
+
+    /// Parse mixing parameters (fixed count - legacy)
     static int parseMixingParameters(ThermoContext& ctx, std::ifstream& file,
                                      int phaseIndex, int nParams);
 

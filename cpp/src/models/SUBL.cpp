@@ -6,6 +6,7 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <iostream>
 
 namespace Thermochimica {
 
@@ -391,11 +392,18 @@ void computeSiteFractions(ThermoContext& ctx, int phaseIndex) {
     }
 }
 
-/// @brief Placeholder for magnetic contribution to Gibbs energy
+/// @brief Magnetic contribution to Gibbs energy for SUBLM phases
+/// @note Not yet implemented - returns zero contribution
 void compGibbsMagneticSoln(ThermoContext& ctx, int iSolnIndex) {
-    // Magnetic contribution for SUBLM phases
-    // This would implement the magnetic ordering contribution
-    // based on Curie temperature and magnetic moment
+    (void)ctx;
+    (void)iSolnIndex;
+    // Magnetic ordering contribution based on Curie temperature and magnetic moment
+    // would be implemented here for SUBLM phases
+    static bool warned = false;
+    if (!warned) {
+        std::cerr << "Warning: Magnetic Gibbs energy contribution (SUBLM) not yet implemented\n";
+        warned = true;
+    }
 }
 
 } // namespace Thermochimica

@@ -11,12 +11,15 @@ bool ConvergenceChecker::check(ThermoContext& ctx) {
     auto& gem = *ctx.gem;
     auto& thermo = *ctx.thermo;
 
+    // Don't declare convergence on the same iteration a phase was added/removed
+    // We need at least one more iteration to compute chemical potentials
+    if (gem.iterGlobal == gem.iterLast) {
+        return false;
+    }
+
     // Quick convergence check based on function norm
     if (gem.dGEMFunctionNorm < thermo.tolerances[kTolFunctionNorm] &&
         gem.iterGlobal - gem.iterLast > 100) {
-        if (gem.iterGlobal <= 50 || gem.iterGlobal % 500 == 0) {
-            // DEBUG: std::cerr << "DEBUG iter " << gem.iterGlobal << ": converged (function norm)\n";
-        }
         return true;
     }
 
@@ -26,86 +29,68 @@ bool ConvergenceChecker::check(ThermoContext& ctx) {
     // Positive = pure condensed species (1-based index)
     // Negative = solution phase: -(phaseIndex + 1)
     // Zero = unused slot (only valid for excess slots beyond active phases)
-    int activePhases = thermo.nConPhases + thermo.nSolnPhases;
-    for (int i = 0; i < activePhases; ++i) {
+    // Note: Pure condensed phases are at slots 0 to nConPhases-1
+    //       Solution phases are at slots nElements-nSolnPhases to nElements-1
+
+    // Check condensed phase slots
+    for (int i = 0; i < thermo.nConPhases; ++i) {
         if (thermo.iAssemblage(i) == 0) {
-            return false;  // Active slot with no phase assigned
+            return false;
+        }
+    }
+    // Check solution phase slots
+    for (int i = 0; i < thermo.nSolnPhases; ++i) {
+        int slot = thermo.nElements - thermo.nSolnPhases + i;
+        if (thermo.iAssemblage(slot) == 0) {
+            return false;
         }
     }
 
     // 2. All phase moles >= 0
     for (int i = 0; i < thermo.nConPhases + thermo.nSolnPhases; ++i) {
         if (thermo.dMolesPhase(i) < 0) {
-            if (gem.iterGlobal <= 50 || gem.iterGlobal % 500 == 0) {
-                // DEBUG: std::cerr << "DEBUG iter " << gem.iterGlobal << ": fail (phase moles < 0)\n";
-            }
             return false;
         }
     }
 
     // 3. Phase rule satisfied
     if (!checkPhaseRule(ctx)) {
-        if (gem.iterGlobal <= 50 || gem.iterGlobal % 500 == 0) {
-            // DEBUG: std::cerr << "DEBUG iter " << gem.iterGlobal << ": fail (phase rule)\n";
-        }
         return false;
     }
 
     // 4. Mass balance residuals
     if (!checkMassBalance(ctx)) {
-        if (gem.iterGlobal <= 50 || gem.iterGlobal % 500 == 0) {
-            // DEBUG: std::cerr << "DEBUG iter " << gem.iterGlobal << ": fail (mass balance)\n";
-        }
         return false;
     }
 
     // 5. Chemical potential residuals
     if (!checkChemicalPotential(ctx)) {
-        if (gem.iterGlobal <= 50 || gem.iterGlobal % 500 == 0) {
-            // DEBUG: std::cerr << "DEBUG iter " << gem.iterGlobal << ": fail (chemical potential)\n";
-        }
         return false;
     }
 
     // 6. Site fractions (for sublattice phases)
     if (thermo.nCountSublattice > 0) {
         if (!checkSiteFractions(ctx)) {
-            if (gem.iterGlobal <= 50 || gem.iterGlobal % 500 == 0) {
-                // DEBUG: std::cerr << "DEBUG iter " << gem.iterGlobal << ": fail (site fractions)\n";
-            }
             return false;
         }
     }
 
     // 7. Unstable solution phases
     if (!checkUnstablePhases(ctx)) {
-        if (gem.iterGlobal <= 50 || gem.iterGlobal % 500 == 0) {
-            // DEBUG: std::cerr << "DEBUG iter " << gem.iterGlobal << ": fail (unstable phases)\n";
-        }
         return false;
     }
 
     // 8. Miscibility gaps
     if (!checkMiscibility(ctx)) {
-        if (gem.iterGlobal <= 50 || gem.iterGlobal % 500 == 0) {
-            // DEBUG: std::cerr << "DEBUG iter " << gem.iterGlobal << ": fail (miscibility)\n";
-        }
         return false;
     }
 
-    if (gem.iterGlobal <= 50 || gem.iterGlobal % 500 == 0) {
-        // DEBUG: std::cerr << "DEBUG iter " << gem.iterGlobal << ": CONVERGED!\n";
-    }
+    // All checks passed
     return true;
 }
 
 bool ConvergenceChecker::checkMassBalance(ThermoContext& ctx) {
     auto& thermo = *ctx.thermo;
-    auto& gem = *ctx.gem;
-
-    bool debug = false;  // Set to true for debugging
-    double maxResidual = 0.0;
-    int worstElement = -1;
 
     for (int j = 0; j < thermo.nElements; ++j) {
         double sum = 0.0;
@@ -122,18 +107,7 @@ bool ConvergenceChecker::checkMassBalance(ThermoContext& ctx) {
         double normalizer = std::max(1.0, thermo.dMolesElement(j));
         residual /= normalizer;
 
-        if (residual > maxResidual) {
-            maxResidual = residual;
-            worstElement = j;
-        }
-
         if (residual > thermo.tolerances[kTolMassBalance]) {
-            if (debug) {
-                std::cerr << "  Mass balance fail: element " << j
-                          << " (" << thermo.cElementName[j] << ")"
-                          << " computed=" << sum << " target=" << thermo.dMolesElement(j)
-                          << " residual=" << residual << "\n";
-            }
             return false;
         }
     }
@@ -143,8 +117,6 @@ bool ConvergenceChecker::checkMassBalance(ThermoContext& ctx) {
 
 bool ConvergenceChecker::checkChemicalPotential(ThermoContext& ctx) {
     auto& thermo = *ctx.thermo;
-    auto& gem = *ctx.gem;
-    auto& io = *ctx.io;
 
     // For now, skip detailed chemical potential checking
     // The mass balance and driving force checks are more important
@@ -170,12 +142,19 @@ bool ConvergenceChecker::checkPhaseRule(ThermoContext& ctx) {
 
     // Gibbs phase rule: F = C - P + 2
     // At fixed T,P: F = C - P >= 0
-    // So: P <= C (where C = nElements - nChargedConstraints)
+    // So: P <= C (where C = number of active components)
 
-    int maxPhases = thermo.nElements - thermo.nChargedConstraints;
+    // Count active elements (with non-zero input)
+    int nActiveElements = 0;
+    for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+        if (thermo.dMolesElement(j) > 0.0) {
+            ++nActiveElements;
+        }
+    }
+
     int totalPhases = thermo.nConPhases + thermo.nSolnPhases;
 
-    return totalPhases <= maxPhases;
+    return totalPhases <= nActiveElements;
 }
 
 bool ConvergenceChecker::checkSiteFractions(ThermoContext& ctx) {
@@ -216,9 +195,16 @@ bool ConvergenceChecker::checkUnstablePhases(ThermoContext& ctx) {
     auto& thermo = *ctx.thermo;
     auto& io = *ctx.io;
 
+    // Don't check unstable phases until Newton has had time to converge
+    // after the last phase change. This prevents premature failure.
+    // But do check if we haven't changed phases yet (iterLast = 0).
+    int iterSincePhaseChange = gem.iterGlobal - gem.iterLast;
+    if (iterSincePhaseChange < 50 && gem.iterLast > 0) {
+        return true;  // Allow more Newton iterations after recent phase change
+    }
+
     double R = Constants::kIdealGasConstant;
     double T = io.dTemperature;
-    bool debug = false;  // Set to true for debugging
 
     // Check driving force of unstable solution phases
     for (int iPhase = 0; iPhase < thermo.nSolnPhasesSys; ++iPhase) {
@@ -230,10 +216,31 @@ bool ConvergenceChecker::checkUnstablePhases(ThermoContext& ctx) {
         int iFirst = (iPhase > 0) ? thermo.nSpeciesPhase(iPhase) : 0;
         int iLast = thermo.nSpeciesPhase(iPhase + 1);
 
+        // Build list of feasible species (only contain active elements)
+        std::vector<int> feasibleSpecies;
+        for (int i = iFirst; i < iLast; ++i) {
+            bool feasible = true;
+            for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+                if (thermo.dStoichSpecies(i, j) > 0.0 && thermo.dMolesElement(j) <= 0.0) {
+                    feasible = false;
+                    break;
+                }
+            }
+            if (feasible) {
+                feasibleSpecies.push_back(i);
+            }
+        }
+
+        // If no feasible species, phase can't be added
+        if (feasibleSpecies.empty()) {
+            gem.dDrivingForceSoln(iPhase) = -1e30;  // Very unfavorable
+            continue;
+        }
+
         double sumExp = 0.0;
         std::vector<double> expVal(iLast - iFirst, 0.0);
 
-        for (int i = iFirst; i < iLast; ++i) {
+        for (int i : feasibleSpecies) {
             double muStar = 0.0;
             for (int j = 0; j < thermo.nElements; ++j) {
                 muStar += thermo.dElementPotential(j) * thermo.dStoichSpecies(i, j);
@@ -249,7 +256,7 @@ bool ConvergenceChecker::checkUnstablePhases(ThermoContext& ctx) {
 
         double drivingForce = 0.0;
         if (sumExp > 1e-300) {
-            for (int i = iFirst; i < iLast; ++i) {
+            for (int i : feasibleSpecies) {
                 double x = expVal[i - iFirst] / sumExp;
                 if (x > 1e-300) {
                     double muStar = 0.0;
@@ -270,10 +277,6 @@ bool ConvergenceChecker::checkUnstablePhases(ThermoContext& ctx) {
 
         // If driving force is positive and significant, phase should be added
         if (-drivingForce > thermo.tolerances[kTolDrivingForce]) {
-            if (debug) {
-                std::cerr << "  Unstable phase " << iPhase << " (" << thermo.cSolnPhaseName[iPhase]
-                          << ") has favorable driving force: " << -drivingForce << "\n";
-            }
             return false;
         }
     }

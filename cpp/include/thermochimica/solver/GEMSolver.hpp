@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../ThermoContext.hpp"
+#include <vector>
 
 namespace Thermochimica {
 
@@ -34,15 +35,25 @@ public:
     static int compute(ThermoContext& ctx);
 
 private:
-    /// Construct the Hessian matrix
+    /// Construct the Hessian matrix (full system)
     static void constructHessian(ThermoContext& ctx,
                                  Eigen::MatrixXd& hessian,
                                  Eigen::VectorXd& rhs);
+
+    /// Construct the Hessian matrix (reduced system with only active elements)
+    static void constructHessianReduced(ThermoContext& ctx,
+                                        Eigen::MatrixXd& hessian,
+                                        Eigen::VectorXd& rhs,
+                                        const std::vector<int>& activeElements);
 
     /// Handle singular matrix case
     static void handleSingular(ThermoContext& ctx,
                                Eigen::MatrixXd& hessian,
                                Eigen::VectorXd& rhs);
+
+    /// Handle singular matrix case (reduced system)
+    static void handleSingularReduced(Eigen::MatrixXd& hessian,
+                                      Eigen::VectorXd& rhs);
 };
 
 /// Line search along Newton direction
@@ -88,9 +99,6 @@ public:
 
     /// Remove a pure condensed phase
     static bool removePureConPhase(ThermoContext& ctx, int speciesIndex);
-
-    /// Swap phases
-    static void swapPhases(ThermoContext& ctx);
 
     /// Revert to previous assemblage
     static void revert(ThermoContext& ctx);

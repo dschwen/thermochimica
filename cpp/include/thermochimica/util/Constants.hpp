@@ -20,7 +20,7 @@ constexpr int kIterGlobalMax = 3000;              // Maximum GEM iterations
 // Gibbs energy coefficients
 constexpr int kNumGibbsCoeff = 13;                // Gibbs polynomial coefficients
 constexpr int kMaxGibbsEqs = 10;                  // Max Gibbs equations per species
-constexpr int kMaxParams = 4;                     // Max mixing parameters
+constexpr int kMaxParams = 10;                    // Max mixing parameters (need extra columns for ternary exponents)
 
 // Numerical constants
 constexpr double kMinMoleFraction = 1.0e-100;     // Minimum mole fraction

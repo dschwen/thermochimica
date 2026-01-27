@@ -10,6 +10,8 @@ void postProcess(ThermoContext& ctx) {
     // Calculate system Gibbs energy
     double G = 0.0;
 
+    double RT = Constants::kIdealGasConstant * io.dTemperature;
+
     // Contribution from solution phases
     for (int iPhase = 0; iPhase < thermo.nSolnPhases; ++iPhase) {
         int phaseIdx = -thermo.iAssemblage(thermo.nElements - thermo.nSolnPhases + iPhase) - 1;
@@ -19,7 +21,11 @@ void postProcess(ThermoContext& ctx) {
         int iLast = thermo.nSpeciesPhase(phaseIdx + 1);
 
         for (int i = iFirst; i < iLast; ++i) {
-            G += thermo.dMolesSpecies(i) * thermo.dChemicalPotential(i);
+            double n = thermo.dMolesSpecies(i);
+            double mu = thermo.dChemicalPotential(i);
+            if (n > 1e-100) {
+                G += n * mu;
+            }
         }
     }
 
@@ -31,8 +37,6 @@ void postProcess(ThermoContext& ctx) {
         }
     }
 
-    // Scale by RT
-    double RT = Constants::kIdealGasConstant * io.dTemperature;
     io.dGibbsEnergySys = G * RT;
 
     // Prepare output arrays
@@ -61,6 +65,9 @@ void postProcess(ThermoContext& ctx) {
             io.dPureConPhaseMolesOut.push_back(thermo.dMolesPhase(i));
         }
     }
+
+    // Compute heat capacity, entropy, and enthalpy if requested
+    computeHeatCapacity(ctx);
 }
 
 } // namespace Thermochimica
