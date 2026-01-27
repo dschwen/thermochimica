@@ -924,68 +924,64 @@ int ChemSageParser::parseMixingParametersLoop(ThermoContext& ctx, std::ifstream&
 
             ++p.nParamCS;
         }
-        // RKMPM format: similar to QKTO but with separate lines
-        // Type (2 or 3) on one line, indices on next, then value lines
-        else if (phaseType == Constants::PhaseType::RKMPM) {
-            int paramType = firstVal;  // 2=binary, 3=ternary
+        // RKMP/RKMPM format: paramType (2/3/4) on one line, indices on next, then k value lines
+        // Loop continues until "0" terminator is read
+        // For binary (2): indices are (species1, species2, k), then k lines of 6 coefficients
+        // For ternary (3): indices are (species1, species2, species3, k), then k lines
+        // For quaternary (4): indices are (species1, species2, species3, species4, k), then k lines
+        else if (phaseType == Constants::PhaseType::RKMP ||
+                 phaseType == Constants::PhaseType::RKMPM) {
+            int paramType = firstVal;  // 2=binary, 3=ternary, 4=quaternary
 
-            // Read indices (i, j, k where k is order/exponent)
+            // Determine number of indices to read based on param type
+            int nIndices = paramType + 1;  // binary=3, ternary=4, quaternary=5
+
+            // Read indices line
             auto indices = readTokens(file);
-            if (indices.size() < 3) break;
+            if (static_cast<int>(indices.size()) < nIndices) break;
 
-            int lastIndex = std::stoi(indices.back());  // Order/exponent
-            int nValueLines = std::max(1, lastIndex);  // Number of value lines
-
-            // Read value lines
-            for (int v = 0; v < nValueLines; ++v) {
-                auto values = readDoubles(file, 6);
-                // Store if needed
+            // Parse species indices (1-based in file)
+            std::vector<int> speciesIdx(paramType);
+            for (int s = 0; s < paramType; ++s) {
+                speciesIdx[s] = std::stoi(indices[s]);
             }
 
-            ++p.nParamCS;
-            // Continue loop to read more params until 0
-        }
-        // For RKMP and other types: firstVal is nParams count
-        else {
-            // RKMP format: firstVal is parameter count
-            for (int i = 0; i < firstVal; ++i) {
-                // Read indices (typically 3)
-                auto indices = readTokens(file);
-                if (indices.size() < 3) break;
+            // Last index is k (number of coefficient sets / polynomial order)
+            int k = std::stoi(indices[paramType]);
+            k = std::max(1, k);
 
-                int iParam = p.nParamCS;
-                if (iParam < p.iRegularParamCS.rows()) {
-                    // Store indices
-                    p.iRegularParamCS(iParam, 1) = 2;  // Binary
-                    p.iRegularParamCS(iParam, 2) = std::stoi(indices[0]);
-                    p.iRegularParamCS(iParam, 3) = std::stoi(indices[1]);
-                    p.iRegularParamCS(iParam, 4) = std::stoi(indices[2]);
-                }
-
-                // Read 6 coefficient values
+            // Read k sets of 6 coefficients, each becomes a separate parameter
+            for (int v = 0; v < k; ++v) {
                 auto values = readDoubles(file, 6);
                 if (values.size() < 6) break;
 
-                if (iParam < p.dRegularParamCS.rows()) {
-                    for (int j = 0; j < 6; ++j) {
-                        p.dRegularParamCS(iParam, j) = values[j];
+                int iParam = p.nParamCS;
+                if (iParam < p.iRegularParamCS.rows()) {
+                    // Column 1: number of species in parameter
+                    p.iRegularParamCS(iParam, 1) = paramType;
+
+                    // Store species indices (keep 1-based as Fortran does)
+                    for (int s = 0; s < paramType; ++s) {
+                        p.iRegularParamCS(iParam, 2 + s) = speciesIdx[s];
+                    }
+
+                    // Set the exponent (0, 1, 2, ... for each coefficient set)
+                    p.iRegularParamCS(iParam, 2 + paramType) = v;
+
+                    // Store L coefficients
+                    for (int c = 0; c < 6; ++c) {
+                        p.dRegularParamCS(iParam, c) = values[c];
                     }
                 }
 
                 ++p.nParamCS;
             }
-            // After RKMP params, look for magnetic params (0 or count)
-            auto magTokens = readTokens(file);
-            if (!magTokens.empty()) {
-                try {
-                    int nMagParams = std::stoi(magTokens[0]);
-                    for (int i = 0; i < nMagParams; ++i) {
-                        readTokens(file);  // indices
-                        readDoubles(file, 6);  // values
-                    }
-                } catch (...) {}
-            }
-            break;  // RKMP has explicit count, so we're done
+            // Continue loop to read more params until 0
+        }
+        // For other phase types, skip unknown mixing format
+        else {
+            // Unknown phase type - try to skip to terminator
+            break;
         }
     }
 
