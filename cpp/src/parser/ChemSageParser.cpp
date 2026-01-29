@@ -1098,6 +1098,9 @@ int ChemSageParser::parseSUBIExcessData(ThermoContext& ctx, std::ifstream& file,
         }
     }
 
+    // Set cumulative parameter count for this phase
+    p.nParamPhaseCS(phaseIndex + 1) = p.nParamCS;
+
     return 0;
 }
 
