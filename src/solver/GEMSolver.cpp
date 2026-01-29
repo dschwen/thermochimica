@@ -129,6 +129,79 @@ int GEMSolver::solve(ThermoContext& ctx) {
             }
         }
 
+        // Update mole fractions for IDEAL solution phases based on element potentials
+        // At equilibrium: x_i ∝ exp(μ* - μ_std) where μ* = Σ_j λ_j * a_{ij} / p_i
+        // Only apply to IDMX phases - non-ideal phases need proper Newton iteration
+        if (thermo.nSolnPhases > 0) {
+            double R = Constants::kIdealGasConstant;
+            double T = io.dTemperature;
+
+            for (int iPhase = 0; iPhase < thermo.nSolnPhases; ++iPhase) {
+                int assembIdx = thermo.nElements - thermo.nSolnPhases + iPhase;
+                int phaseIdx = -thermo.iAssemblage(assembIdx) - 1;
+                if (phaseIdx < 0 || phaseIdx >= thermo.nSolnPhasesSys) continue;
+
+                // Only update mole fractions for ideal mixing phases
+                if (phaseIdx >= static_cast<int>(thermo.cSolnPhaseType.size()) ||
+                    thermo.cSolnPhaseType[phaseIdx] != "IDMX") {
+                    continue;
+                }
+
+                int iFirst = (phaseIdx > 0) ? thermo.nSpeciesPhase(phaseIdx) : 0;
+                int iLast = thermo.nSpeciesPhase(phaseIdx + 1);
+
+                // Compute new mole fractions from element potentials
+                double sumExp = 0.0;
+                std::vector<double> expVal(iLast - iFirst, 0.0);
+
+                for (int i = iFirst; i < iLast; ++i) {
+                    // Check feasibility
+                    bool feasible = true;
+                    for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+                        if (thermo.dStoichSpecies(i, j) > 0.0 && thermo.dMolesElement(j) <= 0.0) {
+                            feasible = false;
+                            break;
+                        }
+                    }
+                    if (!feasible) continue;
+
+                    double muStar = 0.0;
+                    for (int j = 0; j < thermo.nElements; ++j) {
+                        muStar += thermo.dElementPotential(j) * thermo.dStoichSpecies(i, j);
+                    }
+                    muStar /= static_cast<double>(thermo.iParticlesPerMole(i));
+
+                    double muStd = thermo.dStdGibbsEnergy(i) / (R * T);
+                    double arg = muStar - muStd;
+                    // Clamp to prevent overflow
+                    arg = std::max(-100.0, std::min(100.0, arg));
+                    expVal[i - iFirst] = std::exp(arg);
+                    sumExp += expVal[i - iFirst];
+                }
+
+                // Update mole fractions with damping
+                if (sumExp > 1e-300) {
+                    double damping = 0.5;  // Damping factor to prevent oscillation
+                    for (int i = iFirst; i < iLast; ++i) {
+                        double xNew = expVal[i - iFirst] / sumExp;
+                        double xOld = thermo.dMolFraction(i);
+                        thermo.dMolFraction(i) = xOld + damping * (xNew - xOld);
+                    }
+
+                    // Normalize to ensure sum = 1
+                    double sum = 0.0;
+                    for (int i = iFirst; i < iLast; ++i) {
+                        sum += thermo.dMolFraction(i);
+                    }
+                    if (sum > 1e-300) {
+                        for (int i = iFirst; i < iLast; ++i) {
+                            thermo.dMolFraction(i) /= sum;
+                        }
+                    }
+                }
+            }
+        }
+
         // For systems with solution phases, compute Newton direction and perform line search
         // Note: Skip Newton when nSolnPhases=0 because the Hessian is singular without
         // solution phase contributions. Phase assemblage will handle adding solution phases.

@@ -173,8 +173,7 @@ TEST(ThermoErrorTests, Test12_MassNaN) {
 //=============================================================================
 
 // Basic C-O test at 1000K - should produce CO2 gas
-// NOTE: Gas phase handling needs solver improvements - wrong phase assemblage
-TEST(ThermoBasicTests, DISABLED_CO_1000K_CO2) {
+TEST(ThermoBasicTests, CO_1000K_CO2) {
     ThermoContext ctx;
     setStandardUnits(ctx);
     setThermoFilename(ctx, "CO.dat");
