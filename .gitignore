@@ -1,42 +1,34 @@
-# ignore bin/ and obj/ and lib/
+# Build directories
+build/
 bin/
 obj/
 lib/
-# ignore doc subdirectories
+
+# Generated documentation
 doc/html/
 doc/latex/
 doc/test/
-test/doc/
-# ignore outputs
-*.out
-*.txt
-*.dat
-*.DAT
-*.Dat
-*.json
-*.pdf
+
+# Compiler outputs
 *.mod
-*.a
-*.ti
-*.png
-*.jpg
-*.jpeg
-*.la
-*.lo
-*.d
 *.o
+*.a
 *.so
-*.0
-*.lai
-*.csv
-*.pkl
-# ignore vscode cache
-.vscode/
-# some of these will occasionally require manual override
-data/
-test/
-python/
-private_tests
-# Ignore dynamic libraries
 *.dylib
-.libs
+*.d
+*.lo
+*.la
+*.lai
+.libs/
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Test outputs
+*.out
+
+# Private/local
+private_tests/

@@ -1,25 +1,161 @@
-PROJECT(Thermochimica)
-enable_language (Fortran)
-set(CMAKE_Fortran_SOURCE_FILE_EXTENSIONS f90 F90)
-CMAKE_MINIMUM_REQUIRED(VERSION 3.2)
-set(CMAKE_Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules)
-find_package(BLAS)
-find_package(LAPACK)
-if(LAPACK_FOUND AND BLAS_FOUND)
-   set(lapackblas_libraries ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+cmake_minimum_required(VERSION 3.16)
+project(Thermochimica VERSION 2.0.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Options
+option(THERMO_BUILD_TESTS "Build tests" ON)
+option(THERMO_BUILD_EXAMPLES "Build examples" ON)
+
+# Find Eigen3 (or fetch it if not found)
+find_package(Eigen3 3.3 QUIET NO_MODULE)
+if(NOT Eigen3_FOUND)
+    message(STATUS "Eigen3 not found, fetching from git...")
+    include(FetchContent)
+    FetchContent_Declare(
+        eigen
+        GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+        GIT_TAG 3.4.0
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(eigen)
 endif()
 
-SET(Fortran_FLAGS
-    -cpp
-    -D"DATA_DIRECTORY='${CMAKE_CURRENT_SOURCE_DIR}/data/'"
+# Define data directory - use STRING to preserve trailing slash
+set(THERMO_DATA_DIRECTORY "${CMAKE_SOURCE_DIR}/data/" CACHE STRING "Path to thermodynamic data files")
+add_compile_definitions(DATA_DIRECTORY="${THERMO_DATA_DIRECTORY}")
+
+# Compiler warnings
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# Main library sources
+set(THERMO_SOURCES
+    # Context
+    src/context/ThermoContext.cpp
+    src/context/ThermoState.cpp
+    src/context/ThermoIO.cpp
+    src/context/GEMState.cpp
+    src/context/ParserState.cpp
+    src/context/SubMinState.cpp
+    src/context/CTZState.cpp
+    src/context/ReinitState.cpp
+
+    # Parser
+    src/parser/ChemSageParser.cpp
+
+    # Setup
+    src/setup/InitThermo.cpp
+    src/setup/CheckThermoInput.cpp
+
+    # Models
+    src/models/ExcessGibbs.cpp
+    src/models/IdealMixing.cpp
+    src/models/QKTO.cpp
+    src/models/RKMP.cpp
+    src/models/SUBL.cpp
+    src/models/SUBG.cpp
+    src/models/SUBQ.cpp
+
+    # Solver
+    src/solver/GEMSolver.cpp
+    src/solver/GEMNewton.cpp
+    src/solver/GEMLineSearch.cpp
+    src/solver/LevelingSolver.cpp
+    src/solver/Subminimization.cpp
+    src/solver/PhaseAssemblage.cpp
+    src/solver/CheckConvergence.cpp
+
+    # Post-process
+    src/postprocess/PostProcess.cpp
+    src/postprocess/PrintResults.cpp
+    src/postprocess/HeatCapacity.cpp
+
+    # API
+    src/api/Thermochimica.cpp
+    src/api/CouplingAPI.cpp
 )
 
-FOREACH(flag ${Fortran_FLAGS})
-    STRING(REGEX MATCH "${flag}" ispresent "${CMAKE_Fortran_FLAGS}")
-    IF(NOT ispresent)
-        SET(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${flag}")
-    ENDIF()
-ENDFOREACH()
+# Main library
+add_library(thermochimica ${THERMO_SOURCES})
 
-ADD_SUBDIRECTORY(src)
-ADD_SUBDIRECTORY(test)
+target_include_directories(thermochimica
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+)
+
+target_link_libraries(thermochimica PUBLIC Eigen3::Eigen)
+
+# Alias for cleaner usage
+add_library(Thermochimica::thermochimica ALIAS thermochimica)
+
+# Tests
+if(THERMO_BUILD_TESTS)
+    enable_testing()
+    find_package(GTest QUIET)
+    if(NOT GTest_FOUND)
+        message(STATUS "GTest not found, fetching from git...")
+        include(FetchContent)
+        FetchContent_Declare(
+            googletest
+            GIT_REPOSITORY https://github.com/google/googletest.git
+            GIT_TAG v1.14.0
+            GIT_SHALLOW TRUE
+        )
+        # For Windows: Prevent overriding the parent project's compiler/linker settings
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(googletest)
+    endif()
+    add_subdirectory(tests)
+endif()
+
+# Examples
+if(THERMO_BUILD_EXAMPLES)
+    add_executable(example_basic examples/basic_usage.cpp)
+    target_link_libraries(example_basic PRIVATE thermochimica)
+endif()
+
+# Installation
+include(GNUInstallDirs)
+
+install(TARGETS thermochimica
+    EXPORT ThermochimicaTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(DIRECTORY include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(EXPORT ThermochimicaTargets
+    FILE ThermochimicaTargets.cmake
+    NAMESPACE Thermochimica::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Thermochimica
+)
+
+# Package config
+include(CMakePackageConfigHelpers)
+
+configure_package_config_file(
+    ${CMAKE_SOURCE_DIR}/cmake/ThermochimicaConfig.cmake.in
+    ${CMAKE_BINARY_DIR}/ThermochimicaConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Thermochimica
+)
+
+write_basic_package_version_file(
+    ${CMAKE_BINARY_DIR}/ThermochimicaConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    ${CMAKE_BINARY_DIR}/ThermochimicaConfig.cmake
+    ${CMAKE_BINARY_DIR}/ThermochimicaConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Thermochimica
+)

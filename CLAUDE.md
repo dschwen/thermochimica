@@ -4,129 +4,128 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Thermochimica is a computational thermodynamics library written in Fortran 90+ that determines equilibrium phases and compositions for prescribed chemical conditions (temperature, pressure, composition) using Gibbs Energy Minimization (GEM).
+Thermochimica is a computational thermodynamics library written in C++17 that determines equilibrium phases and compositions for prescribed chemical conditions (temperature, pressure, composition) using Gibbs Energy Minimization (GEM).
 
 ## Build Commands
 
 ```bash
-# Build library and all tests (recommended first-time setup)
-make test
+# Configure and build (recommended first-time setup)
+mkdir build && cd build
+cmake ..
+make -j
 
 # Run test suite
-./run_tests
+cd build && ctest --output-on-failure
 
-# Build library only
-make
-
-# Build with debug symbols (-O0 -g)
-make debug
+# Build with debug symbols
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+make -j
 
 # Clean build
-make clean
-
-# Full clean (removes obj/ and bin/)
-make veryclean
-
-# Generate Doxygen documentation
-make doc
-```
-
-### Running Individual Tests
-
-```bash
-# After building, run specific test
-./bin/TestThermo01
-
-# Create and run custom test
-cp test/Thermo.F90 test/demo.F90
-# Edit demo.F90
-make
-./bin/demo
-```
-
-### Running Input Scripts
-
-```bash
-./bin/InputScriptMode inputs/demo.ti
+rm -rf build && mkdir build && cd build && cmake .. && make -j
 ```
 
 ## Architecture
 
-### Core Solver Flow
+### Core Design
 
-1. **Input** → `Thermochimica()` entry point validates T, P, composition via `CheckThermoInput()`
-2. **Parsing** → `ParseCSDataFile()` reads ChemSage `.dat` thermodynamic databases from `data/`
-3. **Calculation** → `CompThermoData()` computes Gibbs energies
-4. **Equilibrium** → `GEMSolver()` performs iterative optimization (Newton direction + line search)
-5. **Output** → `PostProcessThermo()` and optionally `WriteJSON(.TRUE.)` for JSON output
+The library uses a **context-based architecture** where all state is stored in a `ThermoContext` object. This design enables:
+- Thread-safe parallel calculations
+- Multiple simultaneous thermodynamic systems
+- Clear ownership and lifetime management
 
-### Key Directories
+### Directory Structure
 
-- `src/module/` - Core modules with shared state (`ModuleThermo.f90` contains 100+ global variables)
-- `src/gem/` - GEM solver implementation (58 files)
+- `include/thermochimica/` - Public headers
+- `src/context/` - State management classes (ThermoContext, ThermoState, etc.)
 - `src/parser/` - ChemSage data file parsing
-- `src/api/` - Public API for coupling (30 files with getter/setter functions)
-- `src/` - C/C++ interface bindings (`Thermochimica-c.C`, `Thermochimica-cxx.C`)
-- `test/daily/` - Unit tests (`TestThermo[01-90].F90`)
+- `src/setup/` - Input validation and initialization
+- `src/models/` - Thermodynamic models (RKMP, SUBL, SUBG, SUBQ, QKTO, etc.)
+- `src/solver/` - GEM solver implementation
+- `src/postprocess/` - Result processing and output
+- `src/api/` - Public API functions
+- `tests/` - Unit and integration tests
 - `data/` - Thermodynamic databases in ChemSage format
 
-### Key Modules
+### Key Classes
 
-| Module | Purpose |
-|--------|---------|
-| `ModuleThermo.f90` | Core state: phase/species data, results |
-| `ModuleThermoIO.f90` | I/O: input T,P, composition, output flags |
-| `ModuleGEMSolver.f90` | GEM solver state: iteration, convergence |
-| `ModuleParseCS.f90` | Parser state during data file reading |
+| Class | Purpose |
+|-------|---------|
+| `ThermoContext` | Main context object containing all state |
+| `ThermoState` | Thermodynamic state: phases, species, results |
+| `ThermoIO` | I/O parameters: T, P, composition, output flags |
+| `GEMState` | GEM solver state: iteration, convergence |
+| `ParserState` | Parser state during data file reading |
+
+### Solver Flow
+
+1. **Input** → `setThermoFilename()`, `setTemperaturePressure()`, `setElementMass()`
+2. **Parsing** → `parseCSDataFile()` reads ChemSage `.dat` databases
+3. **Calculation** → `thermochimica()` runs full equilibrium calculation
+4. **Output** → `printResults()`, `getOutputChemPot()`, etc.
 
 ### Error Handling
 
-`INFOThermo` integer code (0 = success). Error codes defined in `src/debug/ThermoDebug.f90`.
+`ctx.infoThermo()` returns an integer code (0 = success). Use `getErrorMessage()` for descriptions.
 
-## Coding Conventions
+## API Usage
 
-### Naming Prefixes
+```cpp
+#include <thermochimica/Thermochimica.hpp>
 
-- `d` - double precision real (e.g., `dTemperature`, `dMolesPhase`)
-- `i` - integer (e.g., `iAssemblage`, `nConPhases`)
-- `c` - character/string (e.g., `cElementName`, `cSpeciesName`)
-- `l` - logical (e.g., `lConverged`, `lDebugMode`)
+int main() {
+    Thermochimica::ThermoContext ctx;
 
-### Style
+    Thermochimica::setThermoFilename(ctx, "data/C-O.dat");
+    Thermochimica::parseCSDataFile(ctx);
 
-- One major subroutine per `.f90` file
-- PascalCase for subroutine names (e.g., `GEMSolver`, `CheckPhaseAssemblage`)
-- Doxygen-style comments (`!>`, `!!`) with header blocks documenting purpose, author, date
+    Thermochimica::setStandardUnits(ctx);
+    Thermochimica::setTemperaturePressure(ctx, 1000.0, 1.0);
+    Thermochimica::setElementMass(ctx, 6, 1.0);  // Carbon
 
-### Test Pattern
+    Thermochimica::thermochimica(ctx);
 
-```fortran
-program TestThermo01
-    USE ModuleThermoIO
-    implicit none
-    dTemperature = 300D0
-    dPressure = 1D0
-    dElementMass(6) = 1D0  ! Carbon
-    call ParseCSDataFile('data/C-O.dat')
-    call Thermochimica
-    if (INFOThermo == 0) then
-        print *, 'TestThermo01: PASS'
-        call EXIT(0)
-    else
-        print *, 'TestThermo01: FAIL'
-        call EXIT(1)
-    end if
-end program
+    if (ctx.infoThermo() == 0) {
+        Thermochimica::printResults(ctx);
+    }
+    return 0;
+}
 ```
+
+## Compatibility Layer
+
+For migrating from the old Fortran API, use the compatibility header:
+
+```cpp
+#include <thermochimica/ThermochimicaCompat.hpp>
+using namespace Thermochimica::Compat;
+
+// Old-style API calls now work:
+setThermoFilename("database.dat");
+parseThermoFile();
+thermochimica();
+```
+
+See `docs/migration_guide.md` for detailed migration instructions.
 
 ## Dependencies
 
-- Fortran 90+ compiler (gfortran)
-- LAPACK/BLAS (macOS uses Accelerate framework)
-- g++ for C/C++ interfaces
+- C++17 compiler (GCC 7+, Clang 5+, MSVC 2017+)
+- CMake 3.16+
+- Eigen3 (auto-fetched if not found)
+- GoogleTest (auto-fetched if not found)
 
-## Platform Notes
+## Coding Conventions
 
-- Linux: Links `-llapack -lblas -lgfortran`
-- macOS: Uses `-framework Accelerate`
-- Compiler flags: `-Wall -O2 -ffree-line-length-none -fbounds-check -ffpe-trap=zero -cpp`
+### Naming
+
+- PascalCase for class names: `ThermoContext`, `GEMSolver`
+- camelCase for functions: `setTemperaturePressure()`, `getOutputChemPot()`
+- Member variables: no prefix (use `this->` for disambiguation if needed)
+
+### Style
+
+- All public API functions take `ThermoContext&` as first parameter
+- Use Eigen for matrix/vector operations
+- Prefer `std::optional` and `std::tuple` for multi-value returns
+- Use structured bindings: `auto [value, info] = getResult(ctx, name);`
