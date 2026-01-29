@@ -473,6 +473,63 @@ bool arePhaseConstraintsSatisfied(const ThermoContext& ctx) {
     return ctx.phaseConstraints->areConstraintsSatisfied();
 }
 
+std::vector<double> getAllElementChemicalPotentials(const ThermoContext& ctx) {
+    auto& thermo = *ctx.thermo;
+    std::vector<double> potentials(thermo.nElements);
+    for (int j = 0; j < thermo.nElements; ++j) {
+        potentials[j] = thermo.dElementPotential(j);
+    }
+    return potentials;
+}
+
+std::pair<double, int> getElementChemicalPotential(const ThermoContext& ctx, int elementIndex) {
+    auto& thermo = *ctx.thermo;
+    if (elementIndex < 0 || elementIndex >= thermo.nElements) {
+        return {0.0, -1};
+    }
+    return {thermo.dElementPotential(elementIndex), 0};
+}
+
+std::pair<double, int> getGibbsEnergyDerivative(const ThermoContext& ctx,
+                                                 const std::string& phaseName) {
+    auto& thermo = *ctx.thermo;
+    auto& pc = *ctx.phaseConstraints;
+
+    // Check solution phases first
+    int phaseIdx = thermo.getPhaseIndex(phaseName);
+    if (phaseIdx >= 0 && phaseIdx < static_cast<int>(pc.solnPhaseConstraints.size())) {
+        auto& c = pc.solnPhaseConstraints[phaseIdx];
+        if (c.mode == PhaseConstraintMode::Fixed) {
+            // dG/df = -λ (negative Lagrange multiplier)
+            // The Lagrange multiplier is dimensionless (divided by RT internally)
+            // To return in J, multiply by RT
+            double R = 8.314462618;  // J/(mol·K)
+            double T = ctx.io->dTemperature;
+            return {-c.lagrangeMultiplier * R * T, 0};
+        }
+        // Phase exists but no constraint - derivative is 0 at equilibrium
+        return {0.0, 0};
+    }
+
+    // Check pure condensed phases
+    int speciesIdx = thermo.getSpeciesIndex(phaseName);
+    if (speciesIdx >= 0) {
+        int nSolnSpecies = thermo.nSpeciesPhase(thermo.nSolnPhasesSys);
+        int condIdx = speciesIdx - nSolnSpecies;
+        if (condIdx >= 0 && condIdx < static_cast<int>(pc.condPhaseConstraints.size())) {
+            auto& c = pc.condPhaseConstraints[condIdx];
+            if (c.mode == PhaseConstraintMode::Fixed) {
+                double R = 8.314462618;
+                double T = ctx.io->dTemperature;
+                return {-c.lagrangeMultiplier * R * T, 0};
+            }
+            return {0.0, 0};
+        }
+    }
+
+    return {0.0, -1};  // Phase not found
+}
+
 void setConstraintTolerance(ThermoContext& ctx, double tolerance) {
     ctx.phaseConstraints->constraintTolerance = std::max(1e-10, tolerance);
 }

@@ -340,3 +340,80 @@ TEST(PhaseConstraintEdgeCases, OverconstrainedSystem) {
     // Either outcome is acceptable for an infeasible problem
     // Just verify it doesn't crash
 }
+
+//=============================================================================
+// Chemical Potential and Derivative API Tests
+//=============================================================================
+
+// Test element chemical potential retrieval
+TEST(PhaseConstraintAPI, ElementChemicalPotentials) {
+    ThermoContext ctx;
+    setStandardUnits(ctx);
+    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
+    parseCSDataFile(ctx);
+
+    setTemperaturePressure(ctx, 1500.0, 1.0);
+    setElementMass(ctx, 42, 0.5);  // Mo
+    setElementMass(ctx, 44, 0.5);  // Ru
+
+    // Run unconstrained calculation
+    thermochimica(ctx);
+    ASSERT_EQ(ctx.infoThermo(), 0);
+
+    // Test single element retrieval
+    auto [mo_pot, mo_info] = getElementChemicalPotential(ctx, 0);
+    EXPECT_EQ(mo_info, 0) << "Should retrieve first element potential";
+
+    // Test get all element potentials
+    auto potentials = getAllElementChemicalPotentials(ctx);
+    EXPECT_EQ(potentials.size(), static_cast<size_t>(ctx.thermo->nElements))
+        << "Should return potentials for all elements";
+
+    // Potentials should be finite
+    for (size_t i = 0; i < potentials.size(); ++i) {
+        EXPECT_TRUE(std::isfinite(potentials[i]))
+            << "Element potential " << i << " should be finite";
+    }
+
+    // Test invalid index
+    auto [bad_pot, bad_info] = getElementChemicalPotential(ctx, -1);
+    EXPECT_NE(bad_info, 0) << "Invalid index should return error";
+
+    auto [bad_pot2, bad_info2] = getElementChemicalPotential(ctx, 1000);
+    EXPECT_NE(bad_info2, 0) << "Out of range index should return error";
+}
+
+// Test Gibbs energy derivative (dG/df) retrieval
+TEST(PhaseConstraintAPI, GibbsEnergyDerivative) {
+    ThermoContext ctx;
+    setStandardUnits(ctx);
+    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
+    parseCSDataFile(ctx);
+
+    setTemperaturePressure(ctx, 1500.0, 1.0);
+    setElementMass(ctx, 42, 0.5);  // Mo
+    setElementMass(ctx, 44, 0.5);  // Ru
+
+    // Constrain two phases
+    setSolnPhaseConstraint(ctx, "FCCN", 0.4);
+    setSolnPhaseConstraint(ctx, "BCCN", 0.6);
+
+    thermochimica(ctx);
+    ASSERT_EQ(ctx.infoThermo(), 0);
+
+    // Get derivatives for constrained phases
+    auto [dGdf_fcc, fcc_info] = getGibbsEnergyDerivative(ctx, "FCCN");
+    auto [dGdf_bcc, bcc_info] = getGibbsEnergyDerivative(ctx, "BCCN");
+
+    EXPECT_EQ(fcc_info, 0) << "Should retrieve FCCN derivative";
+    EXPECT_EQ(bcc_info, 0) << "Should retrieve BCCN derivative";
+
+    // At equilibrium with satisfied constraints, derivatives should be near zero
+    // (since the Lagrange multiplier is zero when constraints are satisfied from init)
+    EXPECT_TRUE(std::isfinite(dGdf_fcc)) << "FCCN derivative should be finite";
+    EXPECT_TRUE(std::isfinite(dGdf_bcc)) << "BCCN derivative should be finite";
+
+    // Test non-existent phase
+    auto [dGdf_bad, bad_info] = getGibbsEnergyDerivative(ctx, "NONEXISTENT");
+    EXPECT_NE(bad_info, 0) << "Non-existent phase should return error";
+}

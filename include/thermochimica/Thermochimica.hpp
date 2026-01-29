@@ -152,6 +152,27 @@ std::pair<double, int> getPhaseElementFraction(const ThermoContext& ctx,
 /// @return True if all constraints are satisfied
 bool arePhaseConstraintsSatisfied(const ThermoContext& ctx);
 
+/// Get all element chemical potentials (dimensionless, divided by RT)
+/// @param ctx The thermochimica context
+/// @return Vector of element chemical potentials indexed by element order in database
+std::vector<double> getAllElementChemicalPotentials(const ThermoContext& ctx);
+
+/// Get element chemical potential by index (dimensionless, divided by RT)
+/// @param ctx The thermochimica context
+/// @param elementIndex Element index (0-based)
+/// @return (chemPot, info) where info=0 on success
+std::pair<double, int> getElementChemicalPotential(const ThermoContext& ctx, int elementIndex);
+
+/// Get derivative of Gibbs energy with respect to phase fraction (dG/df)
+/// This is the driving force for phase fraction change at constant T, P, composition.
+/// For constrained equilibrium, this equals -λ (negative Lagrange multiplier).
+/// Units: J (same as Gibbs energy)
+/// @param ctx The thermochimica context
+/// @param phaseName Name of the phase
+/// @return (dGdf, info) where info=0 on success
+std::pair<double, int> getGibbsEnergyDerivative(const ThermoContext& ctx,
+                                                 const std::string& phaseName);
+
 /// Set constraint tolerance
 /// @param ctx The thermochimica context
 /// @param tolerance Tolerance for constraint satisfaction (default 1e-4)
