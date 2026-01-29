@@ -44,7 +44,7 @@ A computational thermodynamics library written in C++17 that determines equilibr
 ### Building
 
 ```bash
-git clone https://github.com/ORNL-CEES/thermochimica.git
+git clone https://github.com/dschwen/thermochimica.git
 cd thermochimica
 mkdir build && cd build
 cmake ..
