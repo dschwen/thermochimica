@@ -6,9 +6,32 @@ A computational thermodynamics library written in C++17 that determines equilibr
 
 - **Context-based architecture**: Thread-safe design with explicit state management
 - **Modern C++17**: Uses Eigen for linear algebra, structured bindings, and RAII
-- **Multiple solution models**: IDMX, RKMP, SUBL, SUBLM, SUBG, SUBQ, QKTO, SUBI, SUBM
+- **Multiple solution models**: IDMX, RKMP, SUBL, SUBLM, SUBG, SUBQ, QKTO, SUBI
 - **ChemSage compatibility**: Reads standard `.dat` thermodynamic database files
+- **Flexible units**: Temperature (K/C/F/R), pressure (atm/bar/Pa), mass (moles/grams)
 - **Cross-platform**: Builds on Linux, macOS, and Windows
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Getting Started](docs/getting-started.md) | Quick start guide with minimal example |
+| [API Reference](docs/api-reference.md) | Complete function reference |
+| [Building](docs/building.md) | Build instructions and project integration |
+| [Configuration](docs/configuration.md) | Tolerances, units, and solver options |
+| [Databases](docs/databases.md) | ChemSage format and available databases |
+| [Examples](docs/examples.md) | Code examples and tutorials |
+| [Error Handling](docs/error-handling.md) | Error codes and troubleshooting |
+| [Architecture](docs/architecture.md) | Internal design for contributors |
+
+### Quick Links
+
+- **Run my first calculation** → [Getting Started](docs/getting-started.md)
+- **Integrate into my project** → [Building - CMake Integration](docs/building.md#cmake-integration)
+- **Look up a function** → [API Reference](docs/api-reference.md)
+- **Customize solver tolerances** → [Configuration - Tolerances](docs/configuration.md#tolerances)
+- **Understand an error code** → [Error Handling](docs/error-handling.md)
+- **Run parallel calculations** → [Examples - Thread Safety](docs/examples.md#thread-safe-parallel-calculations)
 
 ## Quick Start
 
@@ -16,7 +39,7 @@ A computational thermodynamics library written in C++17 that determines equilibr
 
 - C++17 compiler (GCC 7+, Clang 5+, MSVC 2017+)
 - CMake 3.16+
-- Eigen3 and GoogleTest are automatically fetched if not found
+- Eigen3 (auto-fetched if not found)
 
 ### Building
 
@@ -35,7 +58,7 @@ cd build
 ctest --output-on-failure
 ```
 
-## Usage
+## Minimal Example
 
 ```cpp
 #include <thermochimica/Thermochimica.hpp>
@@ -43,28 +66,20 @@ ctest --output-on-failure
 int main() {
     Thermochimica::ThermoContext ctx;
 
-    // Load database
-    Thermochimica::setThermoFilename(ctx, "data/C-O.dat");
+    Thermochimica::setStandardUnits(ctx);
+    Thermochimica::setThermoFilename(ctx, "data/CO.dat");
     Thermochimica::parseCSDataFile(ctx);
 
-    // Set conditions
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setTemperaturePressure(ctx, 1000.0, 1.0);  // 1000 K, 1 atm
-    Thermochimica::setElementMass(ctx, 6, 1.0);   // 1 mol Carbon
-    Thermochimica::setElementMass(ctx, 8, 2.0);   // 2 mol Oxygen
+    Thermochimica::setTemperaturePressure(ctx, 1000.0, 1.0);
+    Thermochimica::setElementMass(ctx, 6, 1.0);   // C
+    Thermochimica::setElementMass(ctx, 8, 2.0);   // O
 
-    // Calculate equilibrium
     Thermochimica::thermochimica(ctx);
 
-    // Check results
-    if (ctx.infoThermo() == 0) {
+    if (ctx.isSuccess()) {
+        double G = Thermochimica::getGibbsEnergy(ctx);
+        // G ≈ -629533 J for CO2 at 1000 K
         Thermochimica::printResults(ctx);
-
-        // Get specific values
-        auto [moles, info] = Thermochimica::getSolnPhaseMol(ctx, "gas_ideal");
-        if (info == 0) {
-            std::cout << "Gas phase: " << moles << " mol\n";
-        }
     }
 
     return 0;
@@ -81,7 +96,7 @@ Each `ThermoContext` is independent, enabling parallel calculations:
 
 void calculate(double temperature) {
     Thermochimica::ThermoContext ctx;
-    Thermochimica::setThermoFilename(ctx, "data/C-O.dat");
+    Thermochimica::setThermoFilename(ctx, "data/CO.dat");
     Thermochimica::parseCSDataFile(ctx);
     Thermochimica::setStandardUnits(ctx);
     Thermochimica::setTemperaturePressure(ctx, temperature, 1.0);
@@ -101,30 +116,6 @@ int main() {
     return 0;
 }
 ```
-
-## Migration from Fortran API
-
-If migrating from the Fortran-backed C++ API, a compatibility layer is available:
-
-```cpp
-#include <thermochimica/ThermochimicaCompat.hpp>
-using namespace Thermochimica::Compat;
-
-// Old-style API calls work with minimal changes:
-setThermoFilename("database.dat");
-parseThermoFile();
-setStandardUnits();
-setTemperaturePressure(1000.0, 1.0);
-setElementMass(26, 0.5);  // Fe
-thermochimica();
-```
-
-See `docs/migration_guide.md` for detailed migration instructions.
-
-## Documentation
-
-- `docs/migration_guide.md` - Migration from Fortran API
-- `doc/thermochimica_user_manual.pdf` - Theory and concepts
 
 ## License
 
