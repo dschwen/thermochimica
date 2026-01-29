@@ -939,8 +939,7 @@ TEST(ThermoWAuArO, Test33_WAuArNeO_900K) {
 //=============================================================================
 
 // TestThermo60: Ti-V-O at 2000K - SlagB and Hema solution phases
-// NOTE: FeTiVO.dat contains SUBQ phases (complex format not fully parsed)
-TEST(ThermoFeTiVO, DISABLED_Test60_TiVO_2000K) {
+TEST(ThermoFeTiVO, Test60_TiVO_2000K) {
     ThermoContext ctx;
     setStandardUnits(ctx);
     setThermoFilename(ctx, "FeTiVO.dat");
@@ -967,8 +966,8 @@ TEST(ThermoFeTiVO, DISABLED_Test60_TiVO_2000K) {
     }
 }
 
-// TestThermo61: Fe-Ti-V-O at 1500K (complex format not fully parsed)
-TEST(ThermoFeTiVO, DISABLED_Test61_FeTiVO_1500K) {
+// TestThermo61: Fe-Ti-V-O at 1500K
+TEST(ThermoFeTiVO, Test61_FeTiVO_1500K) {
     ThermoContext ctx;
     setStandardUnits(ctx);
     setThermoFilename(ctx, "FeTiVO.dat");
@@ -1000,8 +999,7 @@ TEST(ThermoFeTiVO, DISABLED_Test61_FeTiVO_1500K) {
 //=============================================================================
 
 // TestThermo70: Sn-O at 1500K - IONIC_LIQ with miscibility gap
-// NOTE: ZIRC_no_liq.dat has complex multi-sublattice phases
-TEST(ThermoZIRC, DISABLED_Test70_SnO_1500K) {
+TEST(ThermoZIRC, Test70_SnO_1500K) {
     ThermoContext ctx;
     setStandardUnits(ctx);
     setThermoFilename(ctx, "ZIRC_no_liq.dat");
@@ -1028,8 +1026,7 @@ TEST(ThermoZIRC, DISABLED_Test70_SnO_1500K) {
 }
 
 // TestThermo71: Zr-O at 1000K
-// NOTE: ZIRC_no_liq.dat has complex multi-sublattice phases
-TEST(ThermoZIRC, DISABLED_Test71_ZrO_1000K) {
+TEST(ThermoZIRC, Test71_ZrO_1000K) {
     ThermoContext ctx;
     setStandardUnits(ctx);
     setThermoFilename(ctx, "ZIRC_no_liq.dat");

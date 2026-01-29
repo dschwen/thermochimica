@@ -42,7 +42,7 @@ void ParserState::allocate(int nElements, int nSpecies, int nSolnPhases) {
     iSUBIMixTypeCS.resize(nSolnPhases);
     iSUBIMixTypeCS.setZero();
 
-    nInterpolationOverrideCS.resize(nSolnPhases);
+    nInterpolationOverrideCS.resize(nSolnPhases + 1);  // +1 for 1-based indexing
     nInterpolationOverrideCS.setZero();
 
     // 1D real arrays

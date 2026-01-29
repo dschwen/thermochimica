@@ -46,7 +46,7 @@ void ThermoState::allocate(int numElements, int numSpecies, int numSolnPhases, i
     iSUBIMixType.resize(nSolnPhasesSys);
     iSUBIMixType.setZero();
 
-    nInterpolationOverride.resize(nSolnPhasesSys);
+    nInterpolationOverride.resize(nSolnPhasesSys + 1);  // +1 for 1-based indexing
     nInterpolationOverride.setZero();
 
     // 2D integer matrices
