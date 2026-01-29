@@ -414,4 +414,85 @@ int main() {
 
 ---
 
+## Phase Fraction Constraints
+
+Constrain phase fractions for phase field modeling applications:
+
+```cpp
+#include <thermochimica/Thermochimica.hpp>
+#include <iostream>
+#include <iomanip>
+
+int main() {
+    Thermochimica::ThermoContext ctx;
+
+    Thermochimica::setStandardUnits(ctx);
+    Thermochimica::setThermoFilename(ctx, "data/NobleMetals-Kaye.dat");
+    Thermochimica::parseCSDataFile(ctx);
+
+    // Set conditions
+    Thermochimica::setTemperaturePressure(ctx, 1500.0, 1.0);
+    Thermochimica::setElementMass(ctx, 42, 0.5);  // Mo
+    Thermochimica::setElementMass(ctx, 44, 0.5);  // Ru
+
+    // First: unconstrained equilibrium
+    Thermochimica::thermochimica(ctx);
+
+    if (ctx.isSuccess()) {
+        auto [fcc_natural, info] = Thermochimica::getPhaseElementFraction(ctx, "FCCN");
+        std::cout << "Unconstrained FCCN fraction: " << fcc_natural << "\n";
+        std::cout << "Unconstrained Gibbs energy: " << Thermochimica::getGibbsEnergy(ctx) << " J\n\n";
+    }
+
+    // Second: constrained equilibrium
+    Thermochimica::resetThermo(ctx);
+    Thermochimica::setTemperaturePressure(ctx, 1500.0, 1.0);
+    Thermochimica::setElementMass(ctx, 42, 0.5);
+    Thermochimica::setElementMass(ctx, 44, 0.5);
+
+    // Constrain FCCN phase to 40% element fraction
+    Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);
+
+    // Optionally adjust solver parameters
+    Thermochimica::setConstraintTolerance(ctx, 1e-4);
+    Thermochimica::setConstraintMaxOuterIterations(ctx, 30);
+
+    Thermochimica::thermochimica(ctx);
+
+    if (ctx.isSuccess()) {
+        auto [fcc_frac, info] = Thermochimica::getPhaseElementFraction(ctx, "FCCN");
+        std::cout << "Constrained FCCN fraction: " << fcc_frac << "\n";
+        std::cout << "Constrained Gibbs energy: " << Thermochimica::getGibbsEnergy(ctx) << " J\n";
+
+        // Check constraint satisfaction
+        if (Thermochimica::arePhaseConstraintsSatisfied(ctx)) {
+            std::cout << "All phase constraints satisfied.\n";
+        }
+    }
+
+    // Clean up constraints for next calculation
+    Thermochimica::clearPhaseConstraints(ctx);
+
+    return 0;
+}
+```
+
+**Multiple Constraints:**
+
+```cpp
+// Constrain multiple phases simultaneously
+Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);
+Thermochimica::setSolnPhaseConstraint(ctx, "BCCN", 0.3);
+
+// Remove a single constraint
+Thermochimica::removePhaseConstraint(ctx, "BCCN");
+
+// Clear all constraints
+Thermochimica::clearPhaseConstraints(ctx);
+```
+
+**Note:** Phase fraction is defined at the element level as `(sum of element moles in phase) / (total element moles in system)`. This differs from mole fraction, making it suitable for phase field applications.
+
+---
+
 [← Back to README](../README.md) | [Databases](databases.md) | [Error Handling →](error-handling.md)

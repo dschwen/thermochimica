@@ -1,4 +1,5 @@
 #include "thermochimica/solver/GEMSolver.hpp"
+#include "thermochimica/context/PhaseConstraints.hpp"
 #include "thermochimica/util/ErrorCodes.hpp"
 #include "thermochimica/util/Constants.hpp"
 #include <cmath>
@@ -83,20 +84,17 @@ static void computeChemicalPotentials(ThermoContext& ctx) {
     }
 }
 
-int GEMSolver::solve(ThermoContext& ctx) {
+/// Run inner GEM iteration loop (standard or with constraints)
+/// @return true if converged
+static bool runInnerGEMLoop(ThermoContext& ctx) {
     auto& io = *ctx.io;
     auto& gem = *ctx.gem;
     auto& thermo = *ctx.thermo;
+    auto& pc = *ctx.phaseConstraints;
 
-    // Initialize the GEM solver
-    init(ctx);
+    bool hasConstraints = pc.hasActiveConstraints();
 
-    // Check if system with only pure condensed phases is already converged
-    if (thermo.nSolnPhases == 0 && io.INFOThermo == 0 && !io.lReinitLoaded) {
-        checkSysOnlyPureConPhases(ctx);
-    }
-
-    // Main iteration loop
+    // Main inner iteration loop
     for (gem.iterGlobal = 1; gem.iterGlobal <= Constants::kIterGlobalMax; ++gem.iterGlobal) {
         // Compute chemical potentials for solution phases (includes excess Gibbs)
         if (thermo.nSolnPhases > 0) {
@@ -298,6 +296,11 @@ int GEMSolver::solve(ThermoContext& ctx) {
         // Check phase assemblage
         PhaseAssemblage::check(ctx);
 
+        // If constraints are active, compute current phase fractions
+        if (hasConstraints) {
+            ConstrainedGEM::computePhaseElementFractions(ctx);
+        }
+
         // Check convergence
         gem.lConverged = ConvergenceChecker::check(ctx);
 
@@ -307,9 +310,86 @@ int GEMSolver::solve(ThermoContext& ctx) {
         }
     }
 
-    // Report error if not converged
+    return gem.lConverged;
+}
+
+int GEMSolver::solve(ThermoContext& ctx) {
+    auto& io = *ctx.io;
+    auto& gem = *ctx.gem;
+    auto& thermo = *ctx.thermo;
+    auto& pc = *ctx.phaseConstraints;
+
+    // Initialize the GEM solver
+    init(ctx);
+
+    // Check if system with only pure condensed phases is already converged
+    if (thermo.nSolnPhases == 0 && io.INFOThermo == 0 && !io.lReinitLoaded) {
+        checkSysOnlyPureConPhases(ctx);
+    }
+
+    // Check if phase constraints are active
+    if (!pc.hasActiveConstraints()) {
+        // Standard unconstrained GEM solve
+        bool converged = runInnerGEMLoop(ctx);
+
+        if (!converged && io.INFOThermo == 0) {
+            io.INFOThermo = ErrorCode::kGEMSolverDidNotConverge;
+        }
+
+        return io.INFOThermo;
+    }
+
+    // =========================================================================
+    // Augmented Lagrangian outer loop for constrained GEM
+    // =========================================================================
+
+    // Reset constraint state
+    pc.reset();
+
+    for (pc.currentOuterIteration = 0;
+         pc.currentOuterIteration < pc.maxOuterIterations;
+         ++pc.currentOuterIteration) {
+
+        // Reset inner solver state for new outer iteration
+        gem.reset();
+        gem.lConverged = false;
+
+        // Run inner GEM loop with current Lagrange multipliers and penalty
+        bool innerConverged = runInnerGEMLoop(ctx);
+
+        if (io.INFOThermo != 0) {
+            // Error in inner loop
+            return io.INFOThermo;
+        }
+
+        if (!innerConverged) {
+            // Inner loop didn't converge - try continuing with current result
+            // The constraints might still improve
+        }
+
+        // Compute current phase element fractions
+        ConstrainedGEM::computePhaseElementFractions(ctx);
+
+        // Check if constraints are satisfied
+        if (pc.areConstraintsSatisfied()) {
+            // All constraints satisfied - we're done
+            gem.lConverged = true;
+            break;
+        }
+
+        // Update Lagrange multipliers: λ += ρ * (f - f_target)
+        ConstrainedGEM::updateLagrangeMultipliers(ctx);
+
+        // Increase penalty parameter for next outer iteration
+        pc.penaltyParameter *= pc.penaltyGrowthRate;
+    }
+
+    // Check final convergence status
     if (!gem.lConverged && io.INFOThermo == 0) {
-        io.INFOThermo = ErrorCode::kGEMSolverDidNotConverge;
+        // Check if constraints are at least approximately satisfied
+        if (!pc.areConstraintsSatisfied()) {
+            io.INFOThermo = ErrorCode::kGEMSolverDidNotConverge;
+        }
     }
 
     return io.INFOThermo;

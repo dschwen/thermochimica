@@ -100,6 +100,74 @@ void setWriteJSON(ThermoContext& ctx, bool enable);
 void setHeatCapacityEntropyEnthalpy(ThermoContext& ctx, bool enable);
 
 // ============================================================================
+// Phase Constraint Functions
+// ============================================================================
+
+/// Set phase fraction constraint for a solution phase by name
+/// @param ctx The thermochimica context
+/// @param phaseName Name of the solution phase
+/// @param targetFraction Target element-level phase fraction [0, 1]
+void setSolnPhaseConstraint(ThermoContext& ctx,
+                            const std::string& phaseName,
+                            double targetFraction);
+
+/// Set phase fraction constraint for a pure condensed phase by species name
+/// @param ctx The thermochimica context
+/// @param speciesName Name of the pure condensed phase species
+/// @param targetFraction Target element-level phase fraction [0, 1]
+void setCondPhaseConstraint(ThermoContext& ctx,
+                            const std::string& speciesName,
+                            double targetFraction);
+
+/// Set phase fraction constraint by phase index
+/// @param ctx The thermochimica context
+/// @param phaseIndex Index of the phase (0-based)
+/// @param isSolutionPhase True for solution phase, false for pure condensed
+/// @param targetFraction Target element-level phase fraction [0, 1]
+void setPhaseConstraint(ThermoContext& ctx,
+                        int phaseIndex,
+                        bool isSolutionPhase,
+                        double targetFraction);
+
+/// Remove phase fraction constraint
+/// @param ctx The thermochimica context
+/// @param phaseName Name of the phase to remove constraint from
+void removePhaseConstraint(ThermoContext& ctx,
+                           const std::string& phaseName);
+
+/// Remove all phase constraints
+/// @param ctx The thermochimica context
+void clearPhaseConstraints(ThermoContext& ctx);
+
+/// Get current element-level phase fraction
+/// The element phase fraction is: (sum of element moles in phase) / (total element moles)
+/// @param ctx The thermochimica context
+/// @param phaseName Name of the phase
+/// @return (fraction, info) where info=0 on success
+std::pair<double, int> getPhaseElementFraction(const ThermoContext& ctx,
+                                               const std::string& phaseName);
+
+/// Check if all phase constraints are satisfied within tolerance
+/// @param ctx The thermochimica context
+/// @return True if all constraints are satisfied
+bool arePhaseConstraintsSatisfied(const ThermoContext& ctx);
+
+/// Set constraint tolerance
+/// @param ctx The thermochimica context
+/// @param tolerance Tolerance for constraint satisfaction (default 1e-4)
+void setConstraintTolerance(ThermoContext& ctx, double tolerance);
+
+/// Set penalty parameter for augmented Lagrangian method
+/// @param ctx The thermochimica context
+/// @param rho Initial penalty parameter (default 1.0)
+void setConstraintPenaltyParameter(ThermoContext& ctx, double rho);
+
+/// Set maximum outer iterations for augmented Lagrangian loop
+/// @param ctx The thermochimica context
+/// @param maxIter Maximum number of outer iterations (default 20)
+void setConstraintMaxOuterIterations(ThermoContext& ctx, int maxIter);
+
+// ============================================================================
 // Output Retrieval Functions
 // ============================================================================
 

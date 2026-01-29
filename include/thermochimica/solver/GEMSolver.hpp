@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../ThermoContext.hpp"
+#include <Eigen/Dense>
 #include <vector>
 
 namespace Thermochimica {
@@ -120,6 +121,9 @@ public:
     /// @return true if converged
     static bool check(ThermoContext& ctx);
 
+    /// Check if phase constraints are satisfied
+    static bool checkPhaseConstraints(ThermoContext& ctx);
+
 private:
     /// Check mass balance residuals
     static bool checkMassBalance(ThermoContext& ctx);
@@ -138,6 +142,40 @@ private:
 
     /// Check miscibility gaps
     static bool checkMiscibility(ThermoContext& ctx);
+};
+
+/// Constrained GEM solver utilities for phase fraction constraints
+/// Used by augmented Lagrangian method for phase field modeling
+class ConstrainedGEM {
+public:
+    /// Compute current element-level phase fractions for all constrained phases
+    /// @param ctx The thermochimica context
+    static void computePhaseElementFractions(ThermoContext& ctx);
+
+    /// Update Lagrange multipliers after inner GEM convergence
+    /// λ += ρ * (f_p - f_p^target)
+    /// @param ctx The thermochimica context
+    static void updateLagrangeMultipliers(ThermoContext& ctx);
+
+    /// Add constraint penalty gradient contributions to Newton RHS
+    /// @param ctx The thermochimica context
+    /// @param rhs The RHS vector to modify
+    /// @param activeElements List of active element indices
+    static void addConstraintGradients(ThermoContext& ctx,
+                                       Eigen::VectorXd& rhs,
+                                       const std::vector<int>& activeElements);
+
+    /// Add constraint penalty Hessian contributions
+    /// @param ctx The thermochimica context
+    /// @param hessian The Hessian matrix to modify
+    /// @param activeElements List of active element indices
+    static void addConstraintHessian(ThermoContext& ctx,
+                                     Eigen::MatrixXd& hessian,
+                                     const std::vector<int>& activeElements);
+
+    /// Run constrained GEM iteration with penalty terms
+    /// @param ctx The thermochimica context
+    static void runConstrainedGEMIteration(ThermoContext& ctx);
 };
 
 } // namespace Thermochimica
