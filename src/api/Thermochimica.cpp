@@ -463,24 +463,24 @@ std::pair<double, int> getOutputSiteFraction(
 bool isPhaseGas(const ThermoContext& ctx, const std::string& phaseName) {
     auto& thermo = *ctx.thermo;
     int phaseIdx = thermo.getPhaseIndex(phaseName);
-    if (phaseIdx < 0 || phaseIdx >= static_cast<int>(thermo.cSolnPhaseType.size())) {
+    if (phaseIdx < 0 || phaseIdx >= static_cast<int>(thermo.iSolnPhaseType.size())) {
         return false;
     }
 
-    std::string type = thermo.cSolnPhaseType[phaseIdx];
-    return type.find("GAS") != std::string::npos ||
-           type == "IDMX";  // Ideal mixing often used for gas
+    Constants::PhaseType type = thermo.iSolnPhaseType[phaseIdx];
+    // IDMX (ideal mixing) is often used for gas phases
+    return type == Constants::PhaseType::IDMX;
 }
 
 bool isPhaseMQM(const ThermoContext& ctx, const std::string& phaseName) {
     auto& thermo = *ctx.thermo;
     int phaseIdx = thermo.getPhaseIndex(phaseName);
-    if (phaseIdx < 0 || phaseIdx >= static_cast<int>(thermo.cSolnPhaseType.size())) {
+    if (phaseIdx < 0 || phaseIdx >= static_cast<int>(thermo.iSolnPhaseType.size())) {
         return false;
     }
 
-    std::string type = thermo.cSolnPhaseType[phaseIdx];
-    return type == "SUBG" || type == "SUBQ";
+    Constants::PhaseType type = thermo.iSolnPhaseType[phaseIdx];
+    return type == Constants::PhaseType::SUBG || type == Constants::PhaseType::SUBQ;
 }
 
 double getGibbsEnergy(const ThermoContext& ctx) {

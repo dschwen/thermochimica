@@ -14,29 +14,29 @@ void computeExcessGibbsSUBG(ThermoContext& ctx, int phaseIndex);
 void computeExcessGibbs(ThermoContext& ctx, int phaseIndex) {
     auto& thermo = *ctx.thermo;
 
-    if (phaseIndex < 0 || phaseIndex >= static_cast<int>(thermo.cSolnPhaseType.size())) {
+    if (phaseIndex < 0 || phaseIndex >= static_cast<int>(thermo.iSolnPhaseType.size())) {
         return;
     }
 
-    const std::string& phaseType = thermo.cSolnPhaseType[phaseIndex];
+    Constants::PhaseType phaseType = thermo.iSolnPhaseType[phaseIndex];
 
-    if (phaseType == "IDMX") {
+    if (phaseType == Constants::PhaseType::IDMX) {
         // Ideal mixing - no excess Gibbs energy
         thermo.dGibbsSolnPhase(phaseIndex) = 0.0;
-    } else if (phaseType == "QKTO") {
+    } else if (phaseType == Constants::PhaseType::QKTO) {
         // Kohler-Toop model
         // Note: QKTO model uses 1-based phase indexing internally
         computeExcessGibbsQKTO(ctx, phaseIndex + 1);
-    } else if (phaseType == "RKMP" || phaseType == "RKMPM") {
+    } else if (phaseType == Constants::PhaseType::RKMP || phaseType == Constants::PhaseType::RKMPM) {
         // Redlich-Kister-Muggianu
         // computeExcessGibbsRKMP(ctx, phaseIndex);
-    } else if (phaseType == "SUBL" || phaseType == "SUBLM") {
+    } else if (phaseType == Constants::PhaseType::SUBL || phaseType == Constants::PhaseType::SUBLM) {
         // Compound Energy Formalism
         // computeExcessGibbsSUBL(ctx, phaseIndex);
-    } else if (phaseType == "SUBG" || phaseType == "SUBQ") {
+    } else if (phaseType == Constants::PhaseType::SUBG || phaseType == Constants::PhaseType::SUBQ) {
         // Modified Quasichemical Model
         // computeExcessGibbsSUBG(ctx, phaseIndex);
-    } else if (phaseType == "SUBI") {
+    } else if (phaseType == Constants::PhaseType::SUBI) {
         // Ionic sublattice
         // computeExcessGibbsSUBI(ctx, phaseIndex);
     }

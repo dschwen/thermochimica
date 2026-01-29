@@ -34,8 +34,11 @@ void compExcessGibbsEnergyRKMP(ThermoContext& ctx, int iSolnIndex) {
     }
 
     // Only proceed if the phase type is correct
-    const auto& phaseType = thermo.cSolnPhaseType[iSolnIndex];
-    if (phaseType != "RKMP" && phaseType != "RKMPM") {
+    if (iSolnIndex < 0 || iSolnIndex >= static_cast<int>(thermo.iSolnPhaseType.size())) {
+        return;
+    }
+    Constants::PhaseType phaseType = thermo.iSolnPhaseType[iSolnIndex];
+    if (phaseType != Constants::PhaseType::RKMP && phaseType != Constants::PhaseType::RKMPM) {
         return;
     }
 

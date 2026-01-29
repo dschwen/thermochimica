@@ -118,6 +118,7 @@ void ThermoState::allocate(int numElements, int numSpecies, int numSolnPhases, i
     cElementName.resize(nElements);
     cSpeciesName.resize(nSpecies);
     cSolnPhaseType.resize(nSolnPhasesSys);
+    iSolnPhaseType.resize(nSolnPhasesSys, Constants::PhaseType::Unknown);
     cSolnPhaseName.resize(nSolnPhasesSys);
 
     if (numParams > 0) {
@@ -140,6 +141,7 @@ void ThermoState::deallocate() {
     cElementName.clear();
     cSpeciesName.clear();
     cSolnPhaseType.clear();
+    iSolnPhaseType.clear();
     cSolnPhaseName.clear();
     cRegularParam.clear();
     cPairName.clear();

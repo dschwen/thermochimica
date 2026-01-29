@@ -111,7 +111,8 @@ struct ThermoState {
     // Character arrays (using std::string)
     std::vector<std::string> cElementName;      ///< Element names (max 12 chars)
     std::vector<std::string> cSpeciesName;      ///< Species names (max 30 chars)
-    std::vector<std::string> cSolnPhaseType;    ///< Phase types (max 8 chars)
+    std::vector<std::string> cSolnPhaseType;    ///< Phase types as strings (max 8 chars)
+    std::vector<Constants::PhaseType> iSolnPhaseType; ///< Phase types as enum
     std::vector<std::string> cSolnPhaseName;    ///< Phase names (max 25 chars)
     std::vector<char> cRegularParam;            ///< Regular param flags
 

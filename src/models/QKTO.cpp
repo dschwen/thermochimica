@@ -211,9 +211,11 @@ void compExcessGibbsEnergyQKTO(ThermoContext& ctx, int iSolnIndex) {
     auto& thermo = *ctx.thermo;
 
     // Return if no interaction parameters for this phase or wrong type
-    // Note: iSolnIndex is 1-based, but cSolnPhaseType is 0-based
+    // Note: iSolnIndex is 1-based, but iSolnPhaseType is 0-based
     if ((thermo.nParamPhase[iSolnIndex] - thermo.nParamPhase[iSolnIndex - 1] == 0) ||
-        (thermo.cSolnPhaseType[iSolnIndex - 1] != "QKTO")) {
+        (iSolnIndex - 1 < 0) ||
+        (iSolnIndex - 1 >= static_cast<int>(thermo.iSolnPhaseType.size())) ||
+        (thermo.iSolnPhaseType[iSolnIndex - 1] != Constants::PhaseType::QKTO)) {
         return;
     }
 

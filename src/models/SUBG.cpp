@@ -25,8 +25,11 @@ void compExcessGibbsEnergySUBG(ThermoContext& ctx, int iSolnIndex) {
     auto& io = *ctx.io;
 
     // Only proceed for SUBG or SUBQ phases
-    const auto& phaseType = thermo.cSolnPhaseType[iSolnIndex];
-    if (phaseType != "SUBG" && phaseType != "SUBQ") {
+    if (iSolnIndex < 0 || iSolnIndex >= static_cast<int>(thermo.iSolnPhaseType.size())) {
+        return;
+    }
+    Constants::PhaseType phaseType = thermo.iSolnPhaseType[iSolnIndex];
+    if (phaseType != Constants::PhaseType::SUBG && phaseType != Constants::PhaseType::SUBQ) {
         return;
     }
 
@@ -228,10 +231,10 @@ void compExcessGibbsEnergySUBG(ThermoContext& ctx, int iSolnIndex) {
 
         // SUBG and SUBQ differ in entropy calculation
         double dPowXij = 0.0, dPowYi = 0.0;
-        if (phaseType == "SUBG") {
+        if (phaseType == Constants::PhaseType::SUBG) {
             dPowXij = 1.0;
             dPowYi = 1.0;
-        } else if (phaseType == "SUBQ") {
+        } else if (phaseType == Constants::PhaseType::SUBQ) {
             dPowXij = 0.75;
             dPowYi = 0.5;
         }
@@ -324,14 +327,14 @@ void compExcessGibbsEnergySUBG(ThermoContext& ctx, int iSolnIndex) {
                 if (lAsymmetric1[i] && lAsymmetric1[j]) {
                     if (x == k_idx && x == l_idx) {
                         dChi1 += thermo.dMolFraction[iQuad];
-                    } else if (phaseType == "SUBQ" && (x == k_idx || x == l_idx)) {
+                    } else if (phaseType == Constants::PhaseType::SUBQ && (x == k_idx || x == l_idx)) {
                         dChi1 += 0.5 * thermo.dMolFraction[iQuad];
                     }
                 }
                 if (lAsymmetric2[i] && lAsymmetric2[j]) {
                     if (x == k_idx && x == l_idx) {
                         dChi2 += thermo.dMolFraction[iQuad];
-                    } else if (phaseType == "SUBQ" && (x == k_idx || x == l_idx)) {
+                    } else if (phaseType == Constants::PhaseType::SUBQ && (x == k_idx || x == l_idx)) {
                         dChi2 += 0.5 * thermo.dMolFraction[iQuad];
                     }
                 }
@@ -339,7 +342,7 @@ void compExcessGibbsEnergySUBG(ThermoContext& ctx, int iSolnIndex) {
                     (lAsymmetric1[j] || lAsymmetric2[j])) {
                     if (x == k_idx && x == l_idx) {
                         dChiDen += thermo.dMolFraction[iQuad];
-                    } else if (phaseType == "SUBQ" && (x == k_idx || x == l_idx)) {
+                    } else if (phaseType == Constants::PhaseType::SUBQ && (x == k_idx || x == l_idx)) {
                         dChiDen += 0.5 * thermo.dMolFraction[iQuad];
                     }
                 }
@@ -398,14 +401,14 @@ void compExcessGibbsEnergySUBG(ThermoContext& ctx, int iSolnIndex) {
                 if (lAsymmetric1[k_idx] && lAsymmetric1[l_idx]) {
                     if (a == i && a == j) {
                         dChi1 += thermo.dMolFraction[iQuad];
-                    } else if (phaseType == "SUBQ" && (a == i || a == j)) {
+                    } else if (phaseType == Constants::PhaseType::SUBQ && (a == i || a == j)) {
                         dChi1 += 0.5 * thermo.dMolFraction[iQuad];
                     }
                 }
                 if (lAsymmetric2[k_idx] && lAsymmetric2[l_idx]) {
                     if (a == i && a == j) {
                         dChi2 += thermo.dMolFraction[iQuad];
-                    } else if (phaseType == "SUBQ" && (a == i || a == j)) {
+                    } else if (phaseType == Constants::PhaseType::SUBQ && (a == i || a == j)) {
                         dChi2 += 0.5 * thermo.dMolFraction[iQuad];
                     }
                 }
@@ -413,7 +416,7 @@ void compExcessGibbsEnergySUBG(ThermoContext& ctx, int iSolnIndex) {
                     (lAsymmetric1[l_idx] || lAsymmetric2[l_idx])) {
                     if (a == i && a == j) {
                         dChiDen += thermo.dMolFraction[iQuad];
-                    } else if (phaseType == "SUBQ" && (a == i || a == j)) {
+                    } else if (phaseType == Constants::PhaseType::SUBQ && (a == i || a == j)) {
                         dChiDen += 0.5 * thermo.dMolFraction[iQuad];
                     }
                 }
@@ -547,13 +550,13 @@ void compExcessGibbsEnergySUBG(ThermoContext& ctx, int iSolnIndex) {
             if (a != b && x == y) {
                 if (x == k_idx && x == l_idx) {
                     dChiFactor = 1.0;
-                } else if (phaseType == "SUBQ" && (x == k_idx || x == l_idx)) {
+                } else if (phaseType == Constants::PhaseType::SUBQ && (x == k_idx || x == l_idx)) {
                     dChiFactor = 0.5;
                 }
             } else if (a == b && x != y) {
                 if (a == i && a == j) {
                     dChiFactor = 1.0;
-                } else if (phaseType == "SUBQ" && (a == i || a == j)) {
+                } else if (phaseType == Constants::PhaseType::SUBQ && (a == i || a == j)) {
                     dChiFactor = 0.5;
                 }
             }

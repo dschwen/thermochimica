@@ -1422,6 +1422,31 @@ void ChemSageParser::transferToThermoState(ThermoContext& ctx) {
     for (int i = 0; i < p.nSolnPhasesSysCS; ++i) {
         t.cSolnPhaseName[i] = p.cSolnPhaseNameCS[i];
         t.cSolnPhaseType[i] = p.cSolnPhaseTypeCS[i];
+        // Convert string phase type to enum
+        const std::string& typeStr = p.cSolnPhaseTypeCS[i];
+        if (typeStr == "IDMX") {
+            t.iSolnPhaseType[i] = Constants::PhaseType::IDMX;
+        } else if (typeStr == "QKTO") {
+            t.iSolnPhaseType[i] = Constants::PhaseType::QKTO;
+        } else if (typeStr == "RKMP") {
+            t.iSolnPhaseType[i] = Constants::PhaseType::RKMP;
+        } else if (typeStr == "RKMPM") {
+            t.iSolnPhaseType[i] = Constants::PhaseType::RKMPM;
+        } else if (typeStr == "SUBL") {
+            t.iSolnPhaseType[i] = Constants::PhaseType::SUBL;
+        } else if (typeStr == "SUBLM") {
+            t.iSolnPhaseType[i] = Constants::PhaseType::SUBLM;
+        } else if (typeStr == "SUBG") {
+            t.iSolnPhaseType[i] = Constants::PhaseType::SUBG;
+        } else if (typeStr == "SUBQ") {
+            t.iSolnPhaseType[i] = Constants::PhaseType::SUBQ;
+        } else if (typeStr == "SUBI") {
+            t.iSolnPhaseType[i] = Constants::PhaseType::SUBI;
+        } else if (typeStr == "SUBM") {
+            t.iSolnPhaseType[i] = Constants::PhaseType::SUBM;
+        } else {
+            t.iSolnPhaseType[i] = Constants::PhaseType::Unknown;
+        }
         t.nSpeciesPhase(i + 1) = p.nSpeciesPhaseCS(i + 1);
         t.iPhaseSublattice(i) = p.iPhaseSublatticeCS(i);
         t.nParamPhase(i + 1) = p.nParamPhaseCS(i + 1);  // Cumulative param count

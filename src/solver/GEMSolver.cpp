@@ -142,8 +142,8 @@ int GEMSolver::solve(ThermoContext& ctx) {
                 if (phaseIdx < 0 || phaseIdx >= thermo.nSolnPhasesSys) continue;
 
                 // Only update mole fractions for ideal mixing phases
-                if (phaseIdx >= static_cast<int>(thermo.cSolnPhaseType.size()) ||
-                    thermo.cSolnPhaseType[phaseIdx] != "IDMX") {
+                if (phaseIdx >= static_cast<int>(thermo.iSolnPhaseType.size()) ||
+                    thermo.iSolnPhaseType[phaseIdx] != Constants::PhaseType::IDMX) {
                     continue;
                 }
 

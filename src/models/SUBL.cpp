@@ -31,8 +31,11 @@ void compExcessGibbsEnergySUBL(ThermoContext& ctx, int iSolnIndex) {
     auto& io = *ctx.io;
 
     // Only proceed if the correct phase type is selected
-    const auto& phaseType = thermo.cSolnPhaseType[iSolnIndex];
-    if (phaseType != "SUBL" && phaseType != "SUBLM") {
+    if (iSolnIndex < 0 || iSolnIndex >= static_cast<int>(thermo.iSolnPhaseType.size())) {
+        return;
+    }
+    Constants::PhaseType phaseType = thermo.iSolnPhaseType[iSolnIndex];
+    if (phaseType != Constants::PhaseType::SUBL && phaseType != Constants::PhaseType::SUBLM) {
         return;
     }
 
@@ -143,7 +146,7 @@ void compExcessGibbsEnergySUBL(ThermoContext& ctx, int iSolnIndex) {
     // ==================================
     // MAGNETIC TERMS (for SUBLM phases)
     // ==================================
-    if (phaseType == "SUBLM") {
+    if (phaseType == Constants::PhaseType::SUBLM) {
         compGibbsMagneticSoln(ctx, iSolnIndex);
     }
 
