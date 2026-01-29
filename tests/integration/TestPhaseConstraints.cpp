@@ -129,9 +129,10 @@ TEST(PhaseConstraintCalc, UnconstrainedBaseline) {
 // Constrained Calculation Tests
 //=============================================================================
 
-// Test constraining a phase to a specific fraction
-// Note: Full constraint enforcement requires more integration work.
-// This test verifies the infrastructure is in place and constraints are tracked.
+// Test constraining multiple phases to specific fractions (phase field use case)
+// Note: With the phase-field assemblage design, constrained phases are forced into
+// the assemblage and unconstrained phases are excluded. This means we need to
+// constrain multiple phases that sum to ~1.0 for a meaningful test.
 TEST(PhaseConstraintCalc, SinglePhaseConstraint) {
     ThermoContext ctx;
     setStandardUnits(ctx);
@@ -142,17 +143,20 @@ TEST(PhaseConstraintCalc, SinglePhaseConstraint) {
     setElementMass(ctx, 42, 0.5);  // Mo
     setElementMass(ctx, 44, 0.5);  // Ru
 
-    // Constrain FCCN to 40% element fraction
-    double targetFraction = 0.4;
-    setSolnPhaseConstraint(ctx, "FCCN", targetFraction);
+    // Constrain two phases: FCCN to 40%, BCCN to 60% (sum to 1.0)
+    double fccTarget = 0.4;
+    double bccTarget = 0.6;
+    setSolnPhaseConstraint(ctx, "FCCN", fccTarget);
+    setSolnPhaseConstraint(ctx, "BCCN", bccTarget);
 
-    // Verify constraint was set
+    // Verify constraints were set
     EXPECT_TRUE(ctx.phaseConstraints->hasActiveConstraints());
-    EXPECT_EQ(ctx.phaseConstraints->getNumActiveConstraints(), 1);
+    EXPECT_EQ(ctx.phaseConstraints->getNumActiveConstraints(), 2);
 
     // Set solver parameters
-    setConstraintTolerance(ctx, 1e-3);
-    setConstraintMaxOuterIterations(ctx, 30);
+    double tolerance = 1e-2;  // Slightly relaxed tolerance for two-phase system
+    setConstraintTolerance(ctx, tolerance);
+    setConstraintMaxOuterIterations(ctx, 50);
 
     // Run constrained calculation
     thermochimica(ctx);
@@ -162,15 +166,21 @@ TEST(PhaseConstraintCalc, SinglePhaseConstraint) {
 
     // Check that constraint tracking works
     auto [fcc_frac, fcc_info] = getPhaseElementFraction(ctx, "FCCN");
+    auto [bcc_frac, bcc_info] = getPhaseElementFraction(ctx, "BCCN");
     EXPECT_EQ(fcc_info, 0) << "Should be able to get FCC fraction";
+    EXPECT_EQ(bcc_info, 0) << "Should be able to get BCC fraction";
 
-    // Verify phase fractions are computed and in valid range
+    // Verify phase fractions are in valid range
     EXPECT_GE(fcc_frac, 0.0);
     EXPECT_LE(fcc_frac, 1.0);
+    EXPECT_GE(bcc_frac, 0.0);
+    EXPECT_LE(bcc_frac, 1.0);
 
-    // Note: Full constraint enforcement (fcc_frac == targetFraction)
-    // requires deeper integration with the Newton solver.
-    // The current implementation sets up the infrastructure for this.
+    // Verify constraints are enforced within tolerance
+    EXPECT_NEAR(fcc_frac, fccTarget, tolerance)
+        << "FCCN fraction should be within tolerance of target";
+    EXPECT_NEAR(bcc_frac, bccTarget, tolerance)
+        << "BCCN fraction should be within tolerance of target";
 }
 
 // Test that constrained solution has higher Gibbs energy than unconstrained
@@ -219,8 +229,10 @@ TEST(PhaseConstraintCalc, ConstrainedGibbsHigher) {
     }
 }
 
-// Test constraint at edge case: target = 0 (remove phase)
-TEST(PhaseConstraintCalc, ZeroFractionConstraint) {
+// Test constraint with small phase fraction
+// Note: With phase-field design, constraining to 0 means not adding the phase.
+// Instead, test constraining one phase to a small fraction with another taking the rest.
+TEST(PhaseConstraintCalc, SmallFractionConstraint) {
     ThermoContext ctx;
     setStandardUnits(ctx);
     setThermoFilename(ctx, "NobleMetals-Kaye.dat");
@@ -230,16 +242,21 @@ TEST(PhaseConstraintCalc, ZeroFractionConstraint) {
     setElementMass(ctx, 42, 0.5);  // Mo
     setElementMass(ctx, 44, 0.5);  // Ru
 
-    // Try to constrain a phase to 0 (remove it)
-    setSolnPhaseConstraint(ctx, "BCCN", 0.0);
-    setConstraintTolerance(ctx, 1e-3);
+    // Constrain BCCN to small fraction, FCCN takes the rest
+    double bccTarget = 0.1;
+    double fccTarget = 0.9;
+    setSolnPhaseConstraint(ctx, "BCCN", bccTarget);
+    setSolnPhaseConstraint(ctx, "FCCN", fccTarget);
+    setConstraintTolerance(ctx, 1e-2);
+    setConstraintMaxOuterIterations(ctx, 50);
 
     thermochimica(ctx);
 
-    // Check BCC fraction is near zero (or calculation might report error)
     if (ctx.infoThermo() == 0) {
         auto [bcc_frac, bcc_info] = getPhaseElementFraction(ctx, "BCCN");
-        EXPECT_NEAR(bcc_frac, 0.0, 0.02) << "BCC should be nearly absent";
+        auto [fcc_frac, fcc_info] = getPhaseElementFraction(ctx, "FCCN");
+        EXPECT_NEAR(bcc_frac, bccTarget, 0.02) << "BCC should be near target";
+        EXPECT_NEAR(fcc_frac, fccTarget, 0.02) << "FCC should be near target";
     }
 }
 

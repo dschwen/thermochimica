@@ -176,6 +176,13 @@ public:
     /// Run constrained GEM iteration with penalty terms
     /// @param ctx The thermochimica context
     static void runConstrainedGEMIteration(ThermoContext& ctx);
+
+    /// Set up phase assemblage directly from constraints
+    /// For phase field applications: constrained phases are forced into assemblage,
+    /// non-constrained phases are excluded entirely.
+    /// @param ctx The thermochimica context
+    /// @return true if assemblage was set up successfully
+    static bool setupAssemblageFromConstraints(ThermoContext& ctx);
 };
 
 } // namespace Thermochimica

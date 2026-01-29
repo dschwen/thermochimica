@@ -210,8 +210,9 @@ static bool runInnerGEMLoop(ThermoContext& ctx) {
             // Full Newton when we have both solution and condensed phases
             GEMNewton::compute(ctx);
             GEMLineSearch::search(ctx);
-        } else if (thermo.nSolnPhases >= 1 && thermo.nConPhases == 0) {
+        } else if (thermo.nSolnPhases >= 1 && thermo.nConPhases == 0 && !hasConstraints) {
             // Solution phases only, no condensed phases: simpler update
+            // Skip this when constraints are active - phase moles are controlled by constraints
             // First, recalculate phase moles to satisfy mass balance
             for (int iPhase = 0; iPhase < thermo.nSolnPhases; ++iPhase) {
                 int assembIdx = thermo.nElements - thermo.nSolnPhases + iPhase;
@@ -293,8 +294,10 @@ static bool runInnerGEMLoop(ThermoContext& ctx) {
             }
         }
 
-        // Check phase assemblage
-        PhaseAssemblage::check(ctx);
+        // Check phase assemblage (only if no constraints - constrained mode uses fixed assemblage)
+        if (!hasConstraints) {
+            PhaseAssemblage::check(ctx);
+        }
 
         // If constraints are active, compute current phase fractions
         if (hasConstraints) {
@@ -342,6 +345,13 @@ int GEMSolver::solve(ThermoContext& ctx) {
     // =========================================================================
     // Augmented Lagrangian outer loop for constrained GEM
     // =========================================================================
+
+    // Set up assemblage directly from constraints
+    // For phase field: constrained phases are forced in, others excluded
+    if (!ConstrainedGEM::setupAssemblageFromConstraints(ctx)) {
+        io.INFOThermo = ErrorCode::kGEMSolverDidNotConverge;
+        return io.INFOThermo;
+    }
 
     // Reset constraint state
     pc.reset();
