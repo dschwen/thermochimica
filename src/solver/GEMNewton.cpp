@@ -413,7 +413,7 @@ void GEMNewton::constructHessian(ThermoContext& ctx,
     }
 }
 
-void GEMNewton::handleSingular(ThermoContext& ctx,
+void GEMNewton::handleSingular(ThermoContext& /*ctx*/,
                                 Eigen::MatrixXd& hessian,
                                 Eigen::VectorXd& rhs) {
     // For singular matrices, add small diagonal perturbation

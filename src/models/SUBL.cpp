@@ -366,7 +366,6 @@ void computeExcessGibbsSUBL(ThermoContext& ctx, int phaseIndex) {
 /// @brief Compute site fractions from species mole fractions
 void computeSiteFractions(ThermoContext& ctx, int phaseIndex) {
     auto& thermo = *ctx.thermo;
-    auto& gem = *ctx.gem;
 
     int iChargedPhaseID = thermo.iPhaseSublattice[phaseIndex];
     if (iChargedPhaseID <= 0) return;

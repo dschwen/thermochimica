@@ -54,7 +54,6 @@ static double subMinDrivingForce(ThermoContext& ctx, int iFirst, int iLast,
 static double subMinFunctionNorm(ThermoContext& ctx, int iSolnPhaseIndex,
                                  int iFirst, int iLast) {
     auto& thermo = *ctx.thermo;
-    auto& gem = *ctx.gem;
 
     double dSubMinFunctionNorm = -1.0;
 
@@ -76,12 +75,11 @@ static double subMinFunctionNorm(ThermoContext& ctx, int iSolnPhaseIndex,
 
 /// @brief Newton step for subminimization
 static int subMinNewton(ThermoContext& ctx, int iSolnPhaseIndex,
-                        int iFirst, int iLast, int nVar,
+                        int iFirst, int /*iLast*/, int nVar,
                         const std::vector<double>& dChemicalPotentialStar,
                         double dDrivingForce,
                         Eigen::VectorXd& dRHS) {
     auto& thermo = *ctx.thermo;
-    auto& gem = *ctx.gem;
 
     // Number of equations
     int nEqn = nVar + 1;
@@ -214,11 +212,10 @@ static void subMinLineSearch(ThermoContext& ctx, int iSolnPhaseIndex,
 }
 
 /// @brief Check if two phases in a miscibility gap have duplicate compositions
-static bool subMinCheckDuplicate(ThermoContext& ctx, int iSolnPhaseIndex,
+static bool subMinCheckDuplicate(ThermoContext& ctx, int /*iSolnPhaseIndex*/,
                                  int iSolnPhaseIndexOther,
-                                 int iFirst, int iLast, int nVar) {
+                                 int iFirst, int /*iLast*/, int nVar) {
     auto& thermo = *ctx.thermo;
-    auto& gem = *ctx.gem;
 
     const double dTolEuclideanNorm = 1e-4;
 

@@ -334,7 +334,7 @@ std::pair<double, int> getOutputChemPot(const ThermoContext& ctx,
 
 std::tuple<double, double, int> getOutputSolnSpecies(
     const ThermoContext& ctx,
-    const std::string& phaseName,
+    const std::string& /*phaseName*/,
     const std::string& speciesName) {
 
     auto& thermo = *ctx.thermo;
@@ -350,7 +350,7 @@ std::tuple<double, double, int> getOutputSolnSpecies(
 
 std::tuple<double, double, int> getOutputMolSpecies(
     const ThermoContext& ctx,
-    const std::string& phaseName,
+    const std::string& /*phaseName*/,
     const std::string& speciesName) {
 
     auto& thermo = *ctx.thermo;
@@ -440,8 +440,8 @@ int getPhaseIndex(const ThermoContext& ctx, const std::string& phaseName) {
 std::pair<double, int> getOutputSiteFraction(
     const ThermoContext& ctx,
     const std::string& phaseName,
-    int sublattice,
-    const std::string& constituentName) {
+    int /*sublattice*/,
+    const std::string& /*constituentName*/) {
 
     auto& thermo = *ctx.thermo;
 

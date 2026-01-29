@@ -320,7 +320,6 @@ int ChemSageParser::parseDataBlock(ThermoContext& ctx, std::ifstream& file) {
     int nPhasesInFile = p.nSolnPhasesSysCS;
     for (int iFilePhase = 0; iFilePhase < nPhasesInFile; ++iFilePhase) {
         // Read phase name (Entry 1 - separate line, Fortran uses FORMAT(A25))
-        std::streampos posBeforeName = file.tellg();
         if (!std::getline(file, line)) {
             return 1100 + iFilePhase;
         }
@@ -770,7 +769,7 @@ int ChemSageParser::parseSUBGPhase(ThermoContext& ctx, std::ifstream& file,
 }
 
 int ChemSageParser::parseSUBGExcessData(ThermoContext& ctx, std::ifstream& file,
-                                         int phaseIndex, Constants::PhaseType phaseType) {
+                                         int phaseIndex, Constants::PhaseType /*phaseType*/) {
     auto& p = *ctx.parser;
     std::string line;
 
@@ -832,9 +831,6 @@ int ChemSageParser::parseSUBGExcessData(ThermoContext& ctx, std::ifstream& file,
 
         // Read chemical groups for sublattice 2
         readTokens(file);
-
-        // Number of pairs for iConstituentSublattice
-        int nPairs = p.nPairsSROCS(phaseIndex, 0);  // Use actual species count
 
         // Read iConstituentSublattice IDs for sublattice 1 (nPairs values)
         readTokens(file);
@@ -977,9 +973,7 @@ int ChemSageParser::parseSUBIExcessData(ThermoContext& ctx, std::ifstream& file,
         bool isSUBIFormat = (tokens.size() >= 2);
 
         if (isSUBIFormat) {
-            // SUBI format: nSublattice nConstituent on same line
-            int nConstituent = std::stoi(tokens[1]);
-
+            // SUBI format: nSublattice nConstituent on same line (nConstituent in tokens[1] is unused)
             p.nSublatticePhaseCS(phaseIndex) = nSublattice;
 
             // Read constituent names - one line per sublattice

@@ -269,10 +269,7 @@ void compExcessGibbsEnergySUBG(ThermoContext& ctx, int iSolnIndex) {
         int y = yy - nSub1;
         double p = thermo.iRegularParam(abxy, 6);
         double q = thermo.iRegularParam(abxy, 7);
-        double r = thermo.iRegularParam(abxy, 8);
-        double s = thermo.iRegularParam(abxy, 9);
-        int d = thermo.iRegularParam(abxy, 10);
-        int w = thermo.iRegularParam(abxy, 11);
+        // Note: r, s, d, w from iRegularParam indices 8-11 are reserved for future use
 
         // Calculate block index
         int iBlock;
