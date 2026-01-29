@@ -416,12 +416,23 @@ int main() {
 
 ## Phase Fraction Constraints
 
-Constrain phase fractions for phase field modeling applications:
+Constrain phase fractions for phase field modeling applications.
+
+### Fixed Assemblage Mode
+
+When constraints are active, Thermochimica uses a **fixed assemblage mode**:
+
+- **Constrained phases are forced into the assemblage** - regardless of thermodynamic stability
+- **Unconstrained phases are excluded** - not included in the calculation
+- **Constraints must sum to ~1.0** - all element mass must be accounted for
+
+This is designed for phase field coupling where the mesoscale simulation imposes phase fractions, and Thermochimica computes the resulting chemical potentials and compositions.
+
+### Two-Phase Constraint Example
 
 ```cpp
 #include <thermochimica/Thermochimica.hpp>
 #include <iostream>
-#include <iomanip>
 
 int main() {
     Thermochimica::ThermoContext ctx;
@@ -435,23 +446,10 @@ int main() {
     Thermochimica::setElementMass(ctx, 42, 0.5);  // Mo
     Thermochimica::setElementMass(ctx, 44, 0.5);  // Ru
 
-    // First: unconstrained equilibrium
-    Thermochimica::thermochimica(ctx);
-
-    if (ctx.isSuccess()) {
-        auto [fcc_natural, info] = Thermochimica::getPhaseElementFraction(ctx, "FCCN");
-        std::cout << "Unconstrained FCCN fraction: " << fcc_natural << "\n";
-        std::cout << "Unconstrained Gibbs energy: " << Thermochimica::getGibbsEnergy(ctx) << " J\n\n";
-    }
-
-    // Second: constrained equilibrium
-    Thermochimica::resetThermo(ctx);
-    Thermochimica::setTemperaturePressure(ctx, 1500.0, 1.0);
-    Thermochimica::setElementMass(ctx, 42, 0.5);
-    Thermochimica::setElementMass(ctx, 44, 0.5);
-
-    // Constrain FCCN phase to 40% element fraction
+    // Constrain TWO phases with fractions summing to 1.0
+    // This is required: all element mass must go into constrained phases
     Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);
+    Thermochimica::setSolnPhaseConstraint(ctx, "BCCN", 0.6);
 
     // Optionally adjust solver parameters
     Thermochimica::setConstraintTolerance(ctx, 1e-4);
@@ -460,9 +458,10 @@ int main() {
     Thermochimica::thermochimica(ctx);
 
     if (ctx.isSuccess()) {
-        auto [fcc_frac, info] = Thermochimica::getPhaseElementFraction(ctx, "FCCN");
-        std::cout << "Constrained FCCN fraction: " << fcc_frac << "\n";
-        std::cout << "Constrained Gibbs energy: " << Thermochimica::getGibbsEnergy(ctx) << " J\n";
+        auto [fcc_frac, fcc_info] = Thermochimica::getPhaseElementFraction(ctx, "FCCN");
+        auto [bcc_frac, bcc_info] = Thermochimica::getPhaseElementFraction(ctx, "BCCN");
+        std::cout << "FCCN fraction: " << fcc_frac << "\n";  // ~0.4
+        std::cout << "BCCN fraction: " << bcc_frac << "\n";  // ~0.6
 
         // Check constraint satisfaction
         if (Thermochimica::arePhaseConstraintsSatisfied(ctx)) {
@@ -477,21 +476,29 @@ int main() {
 }
 ```
 
-**Multiple Constraints:**
+### Important Notes
 
+**Constraints must account for all mass:**
 ```cpp
-// Constrain multiple phases simultaneously
+// CORRECT: fractions sum to 1.0
 Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);
-Thermochimica::setSolnPhaseConstraint(ctx, "BCCN", 0.3);
+Thermochimica::setSolnPhaseConstraint(ctx, "BCCN", 0.6);
 
+// INCORRECT: single constraint without accounting for remaining mass
+// The phase will end up at 1.0 (100%) since it's the only phase present
+Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);  // Will actually be 1.0!
+```
+
+**Managing constraints:**
+```cpp
 // Remove a single constraint
 Thermochimica::removePhaseConstraint(ctx, "BCCN");
 
-// Clear all constraints
+// Clear all constraints (returns to unconstrained equilibrium mode)
 Thermochimica::clearPhaseConstraints(ctx);
 ```
 
-**Note:** Phase fraction is defined at the element level as `(sum of element moles in phase) / (total element moles in system)`. This differs from mole fraction, making it suitable for phase field applications.
+**Phase fraction definition:** Phase fraction is defined at the element level as `(sum of element moles in phase) / (total element moles in system)`. This differs from mole fraction, making it suitable for phase field applications where you track the spatial distribution of phases.
 
 ---
 

@@ -157,6 +157,18 @@ void setHeatCapacityEntropyEnthalpy(ThermoContext& ctx, bool enable);
 For phase field modeling applications, you can constrain phase fractions at the element level.
 The phase fraction is defined as: `f_p = (sum of element moles in phase p) / (total element moles in system)`.
 
+### Fixed Assemblage Mode
+
+When constraints are active, Thermochimica uses a **fixed assemblage mode** designed for phase field coupling:
+
+- **Constrained phases are forced into the assemblage** - The solver includes exactly the phases you constrain, regardless of whether they would be thermodynamically stable
+- **Unconstrained phases are excluded** - Phases without constraints are not included in the assemblage
+- **Constraints should sum to ~1.0** - Since all element mass must go somewhere, constrain all phases that should be present with fractions that sum to 1.0
+
+This approach differs from the classical unconstrained equilibrium calculation where the solver determines which phases are stable. In phase field applications, the phase fractions are imposed by the mesoscale simulation, and Thermochimica computes the corresponding chemical potentials and compositions.
+
+**Important**: Constraint enforcement only works for phases in the assemblage. If you constrain a single phase to 0.4 without constraining other phases, that phase will end up at 1.0 (100%) because it's the only phase present to hold the element mass.
+
 ### Setting Constraints
 
 ```cpp
@@ -260,15 +272,19 @@ int main() {
     Thermochimica::setElementMass(ctx, 42, 0.5);  // Mo
     Thermochimica::setElementMass(ctx, 44, 0.5);  // Ru
 
-    // Constrain FCCN phase to 40% element fraction
+    // Constrain two phases with fractions summing to 1.0
+    // (Required: all element mass must be accounted for)
     Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);
+    Thermochimica::setSolnPhaseConstraint(ctx, "BCCN", 0.6);
 
     // Run constrained equilibrium
     Thermochimica::thermochimica(ctx);
 
     if (ctx.isSuccess()) {
-        auto [frac, info] = Thermochimica::getPhaseElementFraction(ctx, "FCCN");
-        std::cout << "FCCN fraction: " << frac << std::endl;
+        auto [fcc_frac, fcc_info] = Thermochimica::getPhaseElementFraction(ctx, "FCCN");
+        auto [bcc_frac, bcc_info] = Thermochimica::getPhaseElementFraction(ctx, "BCCN");
+        std::cout << "FCCN fraction: " << fcc_frac << std::endl;  // ~0.4
+        std::cout << "BCCN fraction: " << bcc_frac << std::endl;  // ~0.6
     }
 
     return 0;
