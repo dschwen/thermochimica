@@ -260,6 +260,44 @@ TEST(PhaseConstraintCalc, SmallFractionConstraint) {
     }
 }
 
+// Test constraint with zero phase fraction
+// This simulates a phase field scenario where a phase is completely absent.
+// The solver should handle this gracefully even though the target is zero.
+TEST(PhaseConstraintCalc, ZeroFractionConstraint) {
+    ThermoContext ctx;
+    setStandardUnits(ctx);
+    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
+    parseCSDataFile(ctx);
+
+    setTemperaturePressure(ctx, 1500.0, 1.0);
+    setElementMass(ctx, 42, 0.5);  // Mo
+    setElementMass(ctx, 44, 0.5);  // Ru
+
+    // Constrain FCCN to exactly zero, BCCN takes all
+    // This simulates a phase field scenario where one phase is absent
+    double fccTarget = 0.0;
+    double bccTarget = 1.0;
+    setSolnPhaseConstraint(ctx, "FCCN", fccTarget);
+    setSolnPhaseConstraint(ctx, "BCCN", bccTarget);
+    setConstraintTolerance(ctx, 1e-2);
+    setConstraintMaxOuterIterations(ctx, 50);
+
+    thermochimica(ctx);
+
+    EXPECT_EQ(ctx.infoThermo(), 0) << "Zero-fraction constraint should succeed";
+
+    auto [fcc_frac, fcc_info] = getPhaseElementFraction(ctx, "FCCN");
+    auto [bcc_frac, bcc_info] = getPhaseElementFraction(ctx, "BCCN");
+
+    EXPECT_EQ(fcc_info, 0) << "Should retrieve FCC fraction";
+    EXPECT_EQ(bcc_info, 0) << "Should retrieve BCC fraction";
+
+    // FCC should be exactly zero (or very close)
+    EXPECT_NEAR(fcc_frac, fccTarget, 1e-9) << "FCC should be zero";
+    // BCC should be 1.0 (or very close)
+    EXPECT_NEAR(bcc_frac, bccTarget, 1e-2) << "BCC should be 1.0";
+}
+
 //=============================================================================
 // Reset and Reuse Tests
 //=============================================================================

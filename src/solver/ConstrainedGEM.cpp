@@ -403,7 +403,8 @@ bool ConstrainedGEM::setupAssemblageFromConstraints(ThermoContext& ctx) {
             }
         }
         double phaseMoles = (avgStoich > 1e-10) ? targetElementMoles / avgStoich : 0.1;
-        thermo.dMolesPhase(newIdx) = std::max(1e-10, phaseMoles);
+        // Allow zero phase moles for zero target fractions (phase field use case)
+        thermo.dMolesPhase(newIdx) = std::max(0.0, phaseMoles);
 
         // Update species moles
         for (int i = iFirst; i < iLast; ++i) {
@@ -441,7 +442,8 @@ bool ConstrainedGEM::setupAssemblageFromConstraints(ThermoContext& ctx) {
             stoichSum += thermo.dStoichSpecies(speciesIdx, j);
         }
         double phaseMoles = (stoichSum > 1e-10) ? targetElementMoles / stoichSum : 0.1;
-        thermo.dMolesPhase(thermo.nConPhases) = std::max(1e-10, phaseMoles);
+        // Allow zero phase moles for zero target fractions (phase field use case)
+        thermo.dMolesPhase(thermo.nConPhases) = std::max(0.0, phaseMoles);
         thermo.dMolesSpecies(speciesIdx) = thermo.dMolesPhase(thermo.nConPhases);
 
         thermo.nConPhases++;
@@ -540,9 +542,10 @@ void ConstrainedGEM::updateConstrainedPhaseMoles(ThermoContext& ctx) {
         double targetPhaseMoles = (avgStoich > minPhaseMoles) ? targetElementMoles / avgStoich : 0.1;
 
         // Damped update toward target
+        // Allow zero phase moles for zero target fractions (phase field use case)
         double currentMoles = thermo.dMolesPhase(assembIdx);
         double newMoles = currentMoles + damping * (targetPhaseMoles - currentMoles);
-        thermo.dMolesPhase(assembIdx) = std::max(minPhaseMoles, newMoles);
+        thermo.dMolesPhase(assembIdx) = std::max(0.0, newMoles);
 
         // Update species moles
         double phaseMoles = thermo.dMolesPhase(assembIdx);
@@ -581,9 +584,10 @@ void ConstrainedGEM::updateConstrainedPhaseMoles(ThermoContext& ctx) {
         double targetPhaseMoles = (stoichSum > minPhaseMoles) ? targetElementMoles / stoichSum : 0.1;
 
         // Damped update toward target
+        // Allow zero phase moles for zero target fractions (phase field use case)
         double currentMoles = thermo.dMolesPhase(iCond);
         double newMoles = currentMoles + damping * (targetPhaseMoles - currentMoles);
-        thermo.dMolesPhase(iCond) = std::max(minPhaseMoles, newMoles);
+        thermo.dMolesPhase(iCond) = std::max(0.0, newMoles);
 
         // Update species moles (for pure condensed, species moles = phase moles)
         thermo.dMolesSpecies(speciesIdx) = thermo.dMolesPhase(iCond);
