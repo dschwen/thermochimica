@@ -77,8 +77,13 @@ bool ConvergenceChecker::check(ThermoContext& ctx) {
     }
 
     // 7. Unstable solution phases
-    if (!checkUnstablePhases(ctx)) {
-        return false;
+    // Skip this check when constraints are active - we intentionally force a fixed
+    // assemblage and exclude unconstrained phases. Checking unstable phases would
+    // prevent convergence if any excluded phase has positive driving force.
+    if (!ctx.phaseConstraints->hasActiveConstraints()) {
+        if (!checkUnstablePhases(ctx)) {
+            return false;
+        }
     }
 
     // 8. Miscibility gaps
