@@ -10,6 +10,7 @@ ThermoContext::ThermoContext()
     , submin(std::make_unique<SubMinState>())
     , ctz(std::make_unique<CTZState>())
     , reinit(std::make_unique<ReinitState>())
+    , phaseConstraints(std::make_unique<PhaseConstraints>())
 {
 }
 
@@ -29,6 +30,7 @@ void ThermoContext::resetThermo() {
 
     gem->reset();
     submin->reset();
+    phaseConstraints->reset();
 }
 
 void ThermoContext::resetAll() {
@@ -40,6 +42,7 @@ void ThermoContext::resetAll() {
     submin->reset();
     ctz->reset();
     reinit->clear();
+    phaseConstraints->clear();
 }
 
 void ThermoContext::allocateFromParser() {
@@ -49,9 +52,12 @@ void ThermoContext::allocateFromParser() {
     int nElements = parser->nElementsCS;
     int nSolnPhases = parser->nSolnPhasesSysCS;
     int nSpecies = parser->nSpeciesCS;
+    // Pure condensed phases = total species - species in solution phases
+    int nConPhases = nSpecies - parser->nSpeciesPhaseCS(nSolnPhases);
 
     gem->allocate(nElements, nSolnPhases, nSpecies);
     reinit->allocate(nElements, nSpecies);
+    phaseConstraints->allocate(nSolnPhases, nConPhases);
 }
 
 } // namespace Thermochimica

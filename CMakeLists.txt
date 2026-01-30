@@ -43,6 +43,7 @@ set(THERMO_SOURCES
     src/context/SubMinState.cpp
     src/context/CTZState.cpp
     src/context/ReinitState.cpp
+    src/context/PhaseConstraints.cpp
 
     # Parser
     src/parser/ChemSageParser.cpp
@@ -68,6 +69,7 @@ set(THERMO_SOURCES
     src/solver/Subminimization.cpp
     src/solver/PhaseAssemblage.cpp
     src/solver/CheckConvergence.cpp
+    src/solver/ConstrainedGEM.cpp
 
     # Post-process
     src/postprocess/PostProcess.cpp

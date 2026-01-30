@@ -152,6 +152,147 @@ void setHeatCapacityEntropyEnthalpy(ThermoContext& ctx, bool enable);
 
 ---
 
+## Phase Constraint Functions
+
+For phase field modeling applications, you can constrain phase fractions at the element level.
+The phase fraction is defined as: `f_p = (sum of element moles in phase p) / (total element moles in system)`.
+
+### Fixed Assemblage Mode
+
+When constraints are active, Thermochimica uses a **fixed assemblage mode** designed for phase field coupling:
+
+- **Constrained phases are forced into the assemblage** - The solver includes exactly the phases you constrain, regardless of whether they would be thermodynamically stable
+- **Unconstrained phases are excluded** - Phases without constraints are not included in the assemblage
+- **Constraints should sum to ~1.0** - Since all element mass must go somewhere, constrain all phases that should be present with fractions that sum to 1.0
+
+This approach differs from the classical unconstrained equilibrium calculation where the solver determines which phases are stable. In phase field applications, the phase fractions are imposed by the mesoscale simulation, and Thermochimica computes the corresponding chemical potentials and compositions.
+
+**Important**: Constraint enforcement only works for phases in the assemblage. If you constrain a single phase to 0.4 without constraining other phases, that phase will end up at 1.0 (100%) because it's the only phase present to hold the element mass.
+
+### Setting Constraints
+
+```cpp
+void setSolnPhaseConstraint(ThermoContext& ctx,
+                            const std::string& phaseName,
+                            double targetFraction);
+
+void setCondPhaseConstraint(ThermoContext& ctx,
+                            const std::string& speciesName,
+                            double targetFraction);
+
+void setPhaseConstraint(ThermoContext& ctx,
+                        int phaseIndex,
+                        bool isSolutionPhase,
+                        double targetFraction);
+```
+
+Set a phase fraction constraint. Target fraction must be in range [0, 1].
+
+**Example:**
+```cpp
+// Constrain FCCN phase to 40% element fraction
+Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);
+
+// Constrain a pure condensed phase
+Thermochimica::setCondPhaseConstraint(ctx, "Graphite", 0.1);
+
+// By index (solution phase)
+Thermochimica::setPhaseConstraint(ctx, 1, true, 0.5);
+```
+
+### Removing Constraints
+
+```cpp
+void removePhaseConstraint(ThermoContext& ctx, const std::string& phaseName);
+void clearPhaseConstraints(ThermoContext& ctx);
+```
+
+**Example:**
+```cpp
+Thermochimica::removePhaseConstraint(ctx, "FCCN");  // Remove single constraint
+Thermochimica::clearPhaseConstraints(ctx);          // Remove all constraints
+```
+
+### Querying Phase Fractions
+
+```cpp
+std::pair<double, int> getPhaseElementFraction(const ThermoContext& ctx,
+                                               const std::string& phaseName);
+
+bool arePhaseConstraintsSatisfied(const ThermoContext& ctx);
+```
+
+**Example:**
+```cpp
+auto [fraction, info] = Thermochimica::getPhaseElementFraction(ctx, "FCCN");
+if (info == 0) {
+    std::cout << "FCCN element fraction: " << fraction << "\n";
+}
+
+if (Thermochimica::arePhaseConstraintsSatisfied(ctx)) {
+    std::cout << "All constraints satisfied\n";
+}
+```
+
+### Solver Parameters
+
+```cpp
+void setConstraintTolerance(ThermoContext& ctx, double tolerance);
+void setConstraintPenaltyParameter(ThermoContext& ctx, double rho);
+void setConstraintMaxOuterIterations(ThermoContext& ctx, int maxIter);
+```
+
+| Function | Default | Description |
+|----------|---------|-------------|
+| `setConstraintTolerance` | 1e-4 | Tolerance for constraint satisfaction |
+| `setConstraintPenaltyParameter` | 1.0 | Initial penalty parameter for augmented Lagrangian |
+| `setConstraintMaxOuterIterations` | 20 | Maximum outer iterations |
+
+**Example:**
+```cpp
+Thermochimica::setConstraintTolerance(ctx, 1e-5);
+Thermochimica::setConstraintMaxOuterIterations(ctx, 50);
+```
+
+### Complete Example
+
+```cpp
+#include <thermochimica/Thermochimica.hpp>
+
+int main() {
+    Thermochimica::ThermoContext ctx;
+
+    // Load database
+    Thermochimica::setStandardUnits(ctx);
+    Thermochimica::setThermoFilename(ctx, "NobleMetals-Kaye.dat");
+    Thermochimica::parseCSDataFile(ctx);
+
+    // Set conditions
+    Thermochimica::setTemperaturePressure(ctx, 1500.0, 1.0);
+    Thermochimica::setElementMass(ctx, 42, 0.5);  // Mo
+    Thermochimica::setElementMass(ctx, 44, 0.5);  // Ru
+
+    // Constrain two phases with fractions summing to 1.0
+    // (Required: all element mass must be accounted for)
+    Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);
+    Thermochimica::setSolnPhaseConstraint(ctx, "BCCN", 0.6);
+
+    // Run constrained equilibrium
+    Thermochimica::thermochimica(ctx);
+
+    if (ctx.isSuccess()) {
+        auto [fcc_frac, fcc_info] = Thermochimica::getPhaseElementFraction(ctx, "FCCN");
+        auto [bcc_frac, bcc_info] = Thermochimica::getPhaseElementFraction(ctx, "BCCN");
+        std::cout << "FCCN fraction: " << fcc_frac << std::endl;  // ~0.4
+        std::cout << "BCCN fraction: " << bcc_frac << std::endl;  // ~0.6
+    }
+
+    return 0;
+}
+```
+
+---
+
 ## Output Retrieval Functions
 
 ### System Properties
@@ -366,13 +507,14 @@ if (ctx.infoThermo() != 0) {
 ```cpp
 class ThermoContext {
 public:
-    std::unique_ptr<ThermoState> thermo;   // Core thermodynamic state
-    std::unique_ptr<ThermoIO> io;          // Input/output state
-    std::unique_ptr<GEMState> gem;         // Solver state
-    std::unique_ptr<ParserState> parser;   // Parser state
-    std::unique_ptr<SubMinState> submin;   // Subminimization state
-    std::unique_ptr<CTZState> ctz;         // Common tangent zone state
-    std::unique_ptr<ReinitState> reinit;   // Reinitialization state
+    std::unique_ptr<ThermoState> thermo;           // Core thermodynamic state
+    std::unique_ptr<ThermoIO> io;                  // Input/output state
+    std::unique_ptr<GEMState> gem;                 // Solver state
+    std::unique_ptr<ParserState> parser;           // Parser state
+    std::unique_ptr<SubMinState> submin;           // Subminimization state
+    std::unique_ptr<CTZState> ctz;                 // Common tangent zone state
+    std::unique_ptr<ReinitState> reinit;           // Reinitialization state
+    std::unique_ptr<PhaseConstraints> phaseConstraints;  // Phase fraction constraints
 
     int infoThermo() const;      // Get error code (0 = success)
     bool isSuccess() const;      // Check if last calculation succeeded

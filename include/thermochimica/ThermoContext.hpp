@@ -8,6 +8,7 @@
 #include "context/SubMinState.hpp"
 #include "context/CTZState.hpp"
 #include "context/ReinitState.hpp"
+#include "context/PhaseConstraints.hpp"
 
 namespace Thermochimica {
 
@@ -36,6 +37,9 @@ public:
 
     /// Reinitialization state (ModuleReinit.f90)
     std::unique_ptr<ReinitState> reinit;
+
+    /// Phase constraints state for constrained GEM solver
+    std::unique_ptr<PhaseConstraints> phaseConstraints;
 
     /// Constructor - initializes all state objects
     ThermoContext();

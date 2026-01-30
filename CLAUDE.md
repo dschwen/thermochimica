@@ -110,7 +110,7 @@ See `docs/migration_guide.md` for detailed migration instructions.
 
 ## Dependencies
 
-- C++17 compiler (GCC 7+, Clang 5+, MSVC 2017+)
+- C++17 compiler - **use clang++, not g++**
 - CMake 3.16+
 - Eigen3 (auto-fetched if not found)
 - GoogleTest (auto-fetched if not found)
