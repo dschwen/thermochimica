@@ -364,6 +364,19 @@ int GEMSolver::solve(ThermoContext& ctx) {
         gem.reset();
         gem.lConverged = false;
 
+        // Re-initialize lSolnPhases from assemblage since reset() cleared it
+        // and PhaseAssemblage::check is skipped in constrained mode
+        for (int i = 0; i < thermo.nElements; ++i) {
+            int idx = thermo.iAssemblage(i);
+            if (idx < 0) {
+                // Negative index indicates solution phase
+                int phaseIdx = -idx - 1;
+                if (phaseIdx >= 0 && phaseIdx < static_cast<int>(gem.lSolnPhases.size())) {
+                    gem.lSolnPhases[phaseIdx] = true;
+                }
+            }
+        }
+
         // Run inner GEM loop with current Lagrange multipliers and penalty
         bool innerConverged = runInnerGEMLoop(ctx);
 
