@@ -39,8 +39,11 @@ void ConstrainedGEM::computePhaseElementFractions(ThermoContext& ctx) {
         int iLast = thermo.nSpeciesPhase(iPhase + 1);
 
         for (int i = iFirst; i < iLast; ++i) {
+            // dStoichSpecies is stored multiplied by iParticlesPerMole, so divide to get
+            // the actual stoichiometry coefficient (consistent with mass balance equations)
+            double ppm = static_cast<double>(thermo.iParticlesPerMole(i));
             for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
-                phaseElementMoles += thermo.dMolesSpecies(i) * thermo.dStoichSpecies(i, j);
+                phaseElementMoles += thermo.dMolesSpecies(i) * thermo.dStoichSpecies(i, j) / ppm;
             }
         }
 
@@ -59,9 +62,12 @@ void ConstrainedGEM::computePhaseElementFractions(ThermoContext& ctx) {
             continue;
         }
 
+        // dStoichSpecies is stored multiplied by iParticlesPerMole, so divide to get
+        // the actual stoichiometry coefficient (consistent with mass balance equations)
+        double ppm = static_cast<double>(thermo.iParticlesPerMole(speciesIdx));
         double speciesElementMoles = 0.0;
         for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
-            speciesElementMoles += thermo.dMolesSpecies(speciesIdx) * thermo.dStoichSpecies(speciesIdx, j);
+            speciesElementMoles += thermo.dMolesSpecies(speciesIdx) * thermo.dStoichSpecies(speciesIdx, j) / ppm;
         }
 
         pc.condPhaseConstraints[iCond].currentFraction = speciesElementMoles / totalElementMoles;
