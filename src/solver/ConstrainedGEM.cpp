@@ -1,6 +1,7 @@
 #include "thermochimica/solver/GEMSolver.hpp"
 #include "thermochimica/context/PhaseConstraints.hpp"
 #include "thermochimica/util/Constants.hpp"
+#include "thermochimica/util/Tolerances.hpp"
 #include <cmath>
 #include <algorithm>
 
@@ -535,12 +536,13 @@ void ConstrainedGEM::updateConstrainedPhaseMoles(ThermoContext& ctx) {
         double targetElementMoles = c.targetFraction * totalElementMoles;
 
         // Target phase moles = target element moles / average stoichiometry
-        double targetPhaseMoles = (avgStoich > 1e-10) ? targetElementMoles / avgStoich : 0.1;
+        double minPhaseMoles = thermo.tolerances[kTolPhaseMoles];
+        double targetPhaseMoles = (avgStoich > minPhaseMoles) ? targetElementMoles / avgStoich : 0.1;
 
         // Damped update toward target
         double currentMoles = thermo.dMolesPhase(assembIdx);
         double newMoles = currentMoles + damping * (targetPhaseMoles - currentMoles);
-        thermo.dMolesPhase(assembIdx) = std::max(1e-10, newMoles);
+        thermo.dMolesPhase(assembIdx) = std::max(minPhaseMoles, newMoles);
 
         // Update species moles
         double phaseMoles = thermo.dMolesPhase(assembIdx);
@@ -575,12 +577,13 @@ void ConstrainedGEM::updateConstrainedPhaseMoles(ThermoContext& ctx) {
         double targetElementMoles = c.targetFraction * totalElementMoles;
 
         // Target phase moles = target element moles / stoichiometry sum
-        double targetPhaseMoles = (stoichSum > 1e-10) ? targetElementMoles / stoichSum : 0.1;
+        double minPhaseMoles = thermo.tolerances[kTolPhaseMoles];
+        double targetPhaseMoles = (stoichSum > minPhaseMoles) ? targetElementMoles / stoichSum : 0.1;
 
         // Damped update toward target
         double currentMoles = thermo.dMolesPhase(iCond);
         double newMoles = currentMoles + damping * (targetPhaseMoles - currentMoles);
-        thermo.dMolesPhase(iCond) = std::max(1e-10, newMoles);
+        thermo.dMolesPhase(iCond) = std::max(minPhaseMoles, newMoles);
 
         // Update species moles (for pure condensed, species moles = phase moles)
         thermo.dMolesSpecies(speciesIdx) = thermo.dMolesPhase(iCond);
