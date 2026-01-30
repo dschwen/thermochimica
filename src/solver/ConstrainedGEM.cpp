@@ -551,6 +551,41 @@ void ConstrainedGEM::updateConstrainedPhaseMoles(ThermoContext& ctx) {
         }
     }
 
+    // Update constrained pure condensed phase moles toward target fractions
+    // Pure condensed phases have fixed stoichiometry, so we can only adjust total moles
+    int nSolnSpecies = thermo.nSpeciesPhase(thermo.nSolnPhasesSys);
+    for (int iCond = 0; iCond < thermo.nConPhases; ++iCond) {
+        int speciesIdx = thermo.iAssemblage(iCond) - 1;  // 1-based to 0-based
+        if (speciesIdx < 0 || speciesIdx >= thermo.nSpecies) continue;
+
+        // Map from species index to condensed phase constraint index
+        int condIdx = speciesIdx - nSolnSpecies;
+        if (condIdx < 0 || condIdx >= static_cast<int>(pc.condPhaseConstraints.size())) continue;
+
+        auto& c = pc.condPhaseConstraints[condIdx];
+        if (c.mode != PhaseConstraintMode::Fixed) continue;
+
+        // Compute stoichiometry sum for this species (elements per mole)
+        double stoichSum = 0.0;
+        for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+            stoichSum += thermo.dStoichSpecies(speciesIdx, j);
+        }
+
+        // Target element moles for this phase
+        double targetElementMoles = c.targetFraction * totalElementMoles;
+
+        // Target phase moles = target element moles / stoichiometry sum
+        double targetPhaseMoles = (stoichSum > 1e-10) ? targetElementMoles / stoichSum : 0.1;
+
+        // Damped update toward target
+        double currentMoles = thermo.dMolesPhase(iCond);
+        double newMoles = currentMoles + damping * (targetPhaseMoles - currentMoles);
+        thermo.dMolesPhase(iCond) = std::max(1e-10, newMoles);
+
+        // Update species moles (for pure condensed, species moles = phase moles)
+        thermo.dMolesSpecies(speciesIdx) = thermo.dMolesPhase(iCond);
+    }
+
     // Update mole fractions based on element potentials (for ideal mixing phases)
     // At equilibrium: x_i ∝ exp(μ* - μ_std) where μ* = Σ_j λ_j * a_{ij} / p_i
     for (int iPhase = 0; iPhase < thermo.nSolnPhases; ++iPhase) {
