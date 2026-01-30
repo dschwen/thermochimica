@@ -488,4 +488,176 @@ bool ConstrainedGEM::setupAssemblageFromConstraints(ThermoContext& ctx) {
     return (thermo.nSolnPhases + thermo.nConPhases) > 0;
 }
 
+void ConstrainedGEM::updateConstrainedPhaseMoles(ThermoContext& ctx) {
+    auto& thermo = *ctx.thermo;
+    auto& io = *ctx.io;
+    auto& pc = *ctx.phaseConstraints;
+
+    double R = Constants::kIdealGasConstant;
+    double T = io.dTemperature;
+
+    // Compute total element moles
+    double totalElementMoles = 0.0;
+    for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+        totalElementMoles += thermo.dMolesElement(j);
+    }
+    if (totalElementMoles <= 0.0) return;
+
+    // Update phase moles to match target fractions
+    // Use damped iteration to avoid oscillation
+    double damping = 0.3;
+
+    for (int iPhase = 0; iPhase < thermo.nSolnPhases; ++iPhase) {
+        int assembIdx = thermo.nElements - thermo.nSolnPhases + iPhase;
+        int phaseIdx = -thermo.iAssemblage(assembIdx) - 1;
+        if (phaseIdx < 0 || phaseIdx >= thermo.nSolnPhasesSys) continue;
+
+        // Check if this phase is constrained
+        if (phaseIdx >= static_cast<int>(pc.solnPhaseConstraints.size())) continue;
+        auto& c = pc.solnPhaseConstraints[phaseIdx];
+        if (c.mode != PhaseConstraintMode::Fixed) continue;
+
+        // Get species range for this phase
+        int iFirst = (phaseIdx > 0) ? thermo.nSpeciesPhase(phaseIdx) : 0;
+        int iLast = thermo.nSpeciesPhase(phaseIdx + 1);
+
+        // Compute current average stoichiometry (elements per mole of phase)
+        double avgStoich = 0.0;
+        for (int i = iFirst; i < iLast; ++i) {
+            if (thermo.dMolFraction(i) > 0) {
+                for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+                    avgStoich += thermo.dMolFraction(i) * thermo.dStoichSpecies(i, j);
+                }
+            }
+        }
+
+        // Target element moles for this phase
+        double targetElementMoles = c.targetFraction * totalElementMoles;
+
+        // Target phase moles = target element moles / average stoichiometry
+        double targetPhaseMoles = (avgStoich > 1e-10) ? targetElementMoles / avgStoich : 0.1;
+
+        // Damped update toward target
+        double currentMoles = thermo.dMolesPhase(assembIdx);
+        double newMoles = currentMoles + damping * (targetPhaseMoles - currentMoles);
+        thermo.dMolesPhase(assembIdx) = std::max(1e-10, newMoles);
+
+        // Update species moles
+        double phaseMoles = thermo.dMolesPhase(assembIdx);
+        for (int i = iFirst; i < iLast; ++i) {
+            if (thermo.dMolFraction(i) > 0) {
+                thermo.dMolesSpecies(i) = phaseMoles * thermo.dMolFraction(i);
+            }
+        }
+    }
+
+    // Update mole fractions based on element potentials (for ideal mixing phases)
+    // At equilibrium: x_i ∝ exp(μ* - μ_std) where μ* = Σ_j λ_j * a_{ij} / p_i
+    for (int iPhase = 0; iPhase < thermo.nSolnPhases; ++iPhase) {
+        int assembIdx = thermo.nElements - thermo.nSolnPhases + iPhase;
+        int phaseIdx = -thermo.iAssemblage(assembIdx) - 1;
+        if (phaseIdx < 0 || phaseIdx >= thermo.nSolnPhasesSys) continue;
+
+        // Only update mole fractions for ideal mixing phases
+        if (phaseIdx >= static_cast<int>(thermo.iSolnPhaseType.size()) ||
+            thermo.iSolnPhaseType[phaseIdx] != Constants::PhaseType::IDMX) {
+            continue;
+        }
+
+        int iFirst = (phaseIdx > 0) ? thermo.nSpeciesPhase(phaseIdx) : 0;
+        int iLast = thermo.nSpeciesPhase(phaseIdx + 1);
+
+        // Compute new mole fractions from element potentials
+        double sumExp = 0.0;
+        std::vector<double> expVal(iLast - iFirst, 0.0);
+
+        for (int i = iFirst; i < iLast; ++i) {
+            // Check feasibility
+            bool feasible = true;
+            for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+                if (thermo.dStoichSpecies(i, j) > 0.0 && thermo.dMolesElement(j) <= 0.0) {
+                    feasible = false;
+                    break;
+                }
+            }
+            if (!feasible) continue;
+
+            double muStar = 0.0;
+            for (int j = 0; j < thermo.nElements; ++j) {
+                muStar += thermo.dElementPotential(j) * thermo.dStoichSpecies(i, j);
+            }
+            muStar /= static_cast<double>(thermo.iParticlesPerMole(i));
+
+            double muStd = thermo.dStdGibbsEnergy(i) / (R * T);
+            double arg = muStar - muStd;
+            arg = std::max(-100.0, std::min(100.0, arg));
+            expVal[i - iFirst] = std::exp(arg);
+            sumExp += expVal[i - iFirst];
+        }
+
+        // Update mole fractions with damping
+        if (sumExp > 1e-300) {
+            double moleFracDamping = 0.5;
+            for (int i = iFirst; i < iLast; ++i) {
+                double xNew = expVal[i - iFirst] / sumExp;
+                double xOld = thermo.dMolFraction(i);
+                thermo.dMolFraction(i) = xOld + moleFracDamping * (xNew - xOld);
+            }
+
+            // Normalize to ensure sum = 1
+            double sum = 0.0;
+            for (int i = iFirst; i < iLast; ++i) {
+                sum += thermo.dMolFraction(i);
+            }
+            if (sum > 1e-300) {
+                for (int i = iFirst; i < iLast; ++i) {
+                    thermo.dMolFraction(i) /= sum;
+                }
+            }
+        }
+
+        // Update species moles after mole fraction update
+        double phaseMoles = thermo.dMolesPhase(assembIdx);
+        for (int i = iFirst; i < iLast; ++i) {
+            if (thermo.dMolFraction(i) > 0) {
+                thermo.dMolesSpecies(i) = phaseMoles * thermo.dMolFraction(i);
+            }
+        }
+    }
+
+    // Update element potentials from chemical equilibrium
+    // For species with single element: λ_j = μ_i * p_i / a_{ij}
+    for (int iPhase = 0; iPhase < thermo.nSolnPhases; ++iPhase) {
+        int assembIdx = thermo.nElements - thermo.nSolnPhases + iPhase;
+        int phaseIdx = -thermo.iAssemblage(assembIdx) - 1;
+        if (phaseIdx < 0 || phaseIdx >= thermo.nSolnPhasesSys) continue;
+
+        int iFirst = (phaseIdx > 0) ? thermo.nSpeciesPhase(phaseIdx) : 0;
+        int iLast = thermo.nSpeciesPhase(phaseIdx + 1);
+
+        for (int i = iFirst; i < iLast; ++i) {
+            if (thermo.dMolFraction(i) < 1e-20) continue;
+
+            // Check if this is a pure end member (only one element)
+            int singleElement = -1;
+            int nElements = 0;
+            for (int j = 0; j < thermo.nElements; ++j) {
+                if (thermo.dStoichSpecies(i, j) > 0) {
+                    singleElement = j;
+                    nElements++;
+                }
+            }
+
+            // For pure end member species, λ_j = μ_i * p_i / a_{ij}
+            if (nElements == 1 && singleElement >= 0) {
+                double muStd = thermo.dStdGibbsEnergy(i) / (R * T);
+                double mu = muStd + std::log(thermo.dMolFraction(i));
+                double stoich = thermo.dStoichSpecies(i, singleElement);
+                double particles = thermo.iParticlesPerMole(i);
+                thermo.dElementPotential(singleElement) = mu * particles / stoich;
+            }
+        }
+    }
+}
+
 } // namespace Thermochimica

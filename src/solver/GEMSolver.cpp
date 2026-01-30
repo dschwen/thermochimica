@@ -204,12 +204,11 @@ static bool runInnerGEMLoop(ThermoContext& ctx) {
         // Note: Skip Newton when nSolnPhases=0 because the Hessian is singular without
         // solution phase contributions. Phase assemblage will handle adding solution phases.
         //
-        // IMPORTANT: Skip Newton for now as it's causing phase moles to explode.
-        // The simplified single-phase approach below handles the common case.
-        if (false && thermo.nSolnPhases > 0 && thermo.nConPhases > 0) {
-            // Full Newton when we have both solution and condensed phases
-            GEMNewton::compute(ctx);
-            GEMLineSearch::search(ctx);
+        // For constrained solves, use a specialized update that adjusts phase moles
+        // to satisfy the target phase fractions while maintaining mass balance.
+        if (hasConstraints && thermo.nSolnPhases > 0) {
+            // Constrained solve: directly adjust phase moles toward target fractions
+            ConstrainedGEM::updateConstrainedPhaseMoles(ctx);
         } else if (thermo.nSolnPhases >= 1 && thermo.nConPhases == 0 && !hasConstraints) {
             // Solution phases only, no condensed phases: simpler update
             // Skip this when constraints are active - phase moles are controlled by constraints

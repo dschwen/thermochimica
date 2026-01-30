@@ -183,6 +183,12 @@ public:
     /// @param ctx The thermochimica context
     /// @return true if assemblage was set up successfully
     static bool setupAssemblageFromConstraints(ThermoContext& ctx);
+
+    /// Update phase moles to satisfy target phase fractions
+    /// This is a direct update method for constrained equilibrium that adjusts
+    /// phase moles toward target fractions while updating element potentials.
+    /// @param ctx The thermochimica context
+    static void updateConstrainedPhaseMoles(ThermoContext& ctx);
 };
 
 } // namespace Thermochimica
