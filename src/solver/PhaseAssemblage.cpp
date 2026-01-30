@@ -585,6 +585,15 @@ bool PhaseAssemblage::removeSolnPhase(ThermoContext& ctx, int phaseIndex) {
         return false;
     }
 
+    // Zero out species moles and mole fractions for this phase
+    // (important for mass balance and phase fraction calculations!)
+    int iFirst = (phaseIndex > 0) ? thermo.nSpeciesPhase(phaseIndex) : 0;
+    int iLast = thermo.nSpeciesPhase(phaseIndex + 1);
+    for (int i = iFirst; i < iLast; ++i) {
+        thermo.dMolesSpecies(i) = 0.0;
+        thermo.dMolFraction(i) = 0.0;
+    }
+
     // Shift remaining phases
     for (int i = removeIdx; i < thermo.nElements - 1; ++i) {
         thermo.iAssemblage(i) = thermo.iAssemblage(i + 1);

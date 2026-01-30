@@ -440,6 +440,20 @@ std::pair<double, int> getPhaseElementFraction(const ThermoContext& ctx,
     // Try as solution phase first
     int phaseIdx = thermo.getPhaseIndex(phaseName);
     if (phaseIdx >= 0 && phaseIdx < thermo.nSolnPhasesSys) {
+        // Check if phase is in the current assemblage
+        // (species moles may be stale if phase was removed)
+        bool inAssemblage = false;
+        for (int i = thermo.nElements - thermo.nSolnPhases; i < thermo.nElements; ++i) {
+            if (thermo.iAssemblage(i) == -(phaseIdx + 1)) {
+                inAssemblage = true;
+                break;
+            }
+        }
+
+        if (!inAssemblage) {
+            return {0.0, 0};  // Phase not in assemblage, fraction is zero
+        }
+
         // Sum element moles in this phase
         double phaseElementMoles = 0.0;
         int iFirst = (phaseIdx > 0) ? thermo.nSpeciesPhase(phaseIdx) : 0;
@@ -457,6 +471,19 @@ std::pair<double, int> getPhaseElementFraction(const ThermoContext& ctx,
     // Try as pure condensed species
     int speciesIdx = thermo.getSpeciesIndex(phaseName);
     if (speciesIdx >= 0) {
+        // Check if species is in the current assemblage
+        bool inAssemblage = false;
+        for (int i = 0; i < thermo.nConPhases; ++i) {
+            if (thermo.iAssemblage(i) == speciesIdx + 1) {
+                inAssemblage = true;
+                break;
+            }
+        }
+
+        if (!inAssemblage) {
+            return {0.0, 0};  // Species not in assemblage, fraction is zero
+        }
+
         // Sum element moles from this species
         double speciesElementMoles = 0.0;
         for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
