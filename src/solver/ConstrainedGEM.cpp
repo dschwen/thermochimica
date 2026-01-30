@@ -292,24 +292,14 @@ bool ConstrainedGEM::setupAssemblageFromConstraints(ThermoContext& ctx) {
         }
     }
 
-    // Count active elements (those with non-zero input mass)
-    // The Gibbs phase rule limit is based on active elements, not total database elements
-    int nActiveElements = 0;
-    for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
-        if (thermo.dMolesElement(j) > 0.0) {
-            nActiveElements++;
-        }
-    }
-
-    // Validate: total phases cannot exceed number of active elements (Gibbs phase rule)
-    // Using nElements for array bounds, but nActiveElements for thermodynamic validity
+    // Check array bounds - this is a hard limit based on data structure sizes
+    // Note: We do NOT enforce Gibbs phase rule (P <= C) here because in constrained
+    // equilibrium, the phase fraction constraints provide additional degrees of freedom.
+    // For example, a binary alloy with 3 constrained phases is feasible because the
+    // phase fractions are externally specified rather than determined by minimization.
     int nTotalConstrained = nConstrainedSoln + nConstrainedCond;
-    if (nTotalConstrained > nActiveElements) {
-        // Too many constrained phases for this system's active elements
-        return false;
-    }
-    // Also check array bounds (should be redundant but safety check)
     if (nTotalConstrained > thermo.nElements) {
+        // Exceeds array bounds
         return false;
     }
 

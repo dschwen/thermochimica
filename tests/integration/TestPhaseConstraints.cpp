@@ -298,6 +298,61 @@ TEST(PhaseConstraintCalc, ZeroFractionConstraint) {
     EXPECT_NEAR(bcc_frac, bccTarget, 1e-2) << "BCC should be 1.0";
 }
 
+// Test constraining more phases than elements (common phase field scenario)
+// In a binary system (2 elements), we can constrain 3 phases because the
+// phase fraction constraints provide additional degrees of freedom beyond
+// what the Gibbs phase rule allows for unconstrained equilibrium.
+TEST(PhaseConstraintCalc, MorePhasesThanElements) {
+    ThermoContext ctx;
+    setStandardUnits(ctx);
+    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
+    parseCSDataFile(ctx);
+
+    setTemperaturePressure(ctx, 1500.0, 1.0);
+    // Binary system: Mo and Ru (2 active elements)
+    setElementMass(ctx, 42, 0.5);  // Mo
+    setElementMass(ctx, 44, 0.5);  // Ru
+
+    // Constrain 3 phases in a 2-element system
+    // This exceeds Gibbs phase rule (P <= C) but is valid for constrained equilibrium
+    double fccTarget = 0.4;
+    double bccTarget = 0.4;
+    double hcpTarget = 0.2;
+    setSolnPhaseConstraint(ctx, "FCCN", fccTarget);
+    setSolnPhaseConstraint(ctx, "BCCN", bccTarget);
+    setSolnPhaseConstraint(ctx, "HCPN", hcpTarget);
+    setConstraintTolerance(ctx, 1e-2);
+    setConstraintMaxOuterIterations(ctx, 50);
+
+    // Verify we have 3 constraints in a 2-element system
+    EXPECT_EQ(ctx.phaseConstraints->getNumActiveConstraints(), 3);
+
+    thermochimica(ctx);
+
+    // Should succeed despite having more phases than elements
+    EXPECT_EQ(ctx.infoThermo(), 0)
+        << "Constrained equilibrium with more phases than elements should succeed";
+
+    if (ctx.infoThermo() == 0) {
+        auto [fcc_frac, fcc_info] = getPhaseElementFraction(ctx, "FCCN");
+        auto [bcc_frac, bcc_info] = getPhaseElementFraction(ctx, "BCCN");
+        auto [hcp_frac, hcp_info] = getPhaseElementFraction(ctx, "HCPN");
+
+        EXPECT_EQ(fcc_info, 0) << "Should retrieve FCC fraction";
+        EXPECT_EQ(bcc_info, 0) << "Should retrieve BCC fraction";
+        EXPECT_EQ(hcp_info, 0) << "Should retrieve HCP fraction";
+
+        // Verify constraints are satisfied within tolerance
+        EXPECT_NEAR(fcc_frac, fccTarget, 0.02) << "FCC should match target";
+        EXPECT_NEAR(bcc_frac, bccTarget, 0.02) << "BCC should match target";
+        EXPECT_NEAR(hcp_frac, hcpTarget, 0.02) << "HCP should match target";
+
+        // Fractions should sum to approximately 1
+        double totalFrac = fcc_frac + bcc_frac + hcp_frac;
+        EXPECT_NEAR(totalFrac, 1.0, 0.05) << "Phase fractions should sum to ~1";
+    }
+}
+
 //=============================================================================
 // Reset and Reuse Tests
 //=============================================================================
