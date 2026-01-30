@@ -24,8 +24,9 @@ void PhaseConstraints::allocate(int nSolnPhasesSys, int nConPhasesSys) {
 }
 
 void PhaseConstraints::reset() {
-    // Reset solver state but keep constraint definitions
-    penaltyParameter = 1.0;
+    // Reset solver state but keep constraint definitions and user parameters
+    // Restore penalty to user-specified initial value (not hard-coded 1.0)
+    penaltyParameter = initialPenaltyParameter;
     currentOuterIteration = 0;
 
     // Reset Lagrange multipliers and current fractions
@@ -54,8 +55,9 @@ void PhaseConstraints::clear() {
         c.currentFraction = 0.0;
     }
 
-    // Reset parameters
+    // Reset parameters to defaults
     penaltyParameter = 1.0;
+    initialPenaltyParameter = 1.0;
     penaltyGrowthRate = 10.0;
     constraintTolerance = 1e-4;
     maxOuterIterations = 20;

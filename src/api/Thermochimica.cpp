@@ -535,7 +535,9 @@ void setConstraintTolerance(ThermoContext& ctx, double tolerance) {
 }
 
 void setConstraintPenaltyParameter(ThermoContext& ctx, double rho) {
-    ctx.phaseConstraints->penaltyParameter = std::max(1e-10, rho);
+    double value = std::max(1e-10, rho);
+    ctx.phaseConstraints->penaltyParameter = value;
+    ctx.phaseConstraints->initialPenaltyParameter = value;
 }
 
 void setConstraintMaxOuterIterations(ThermoContext& ctx, int maxIter) {

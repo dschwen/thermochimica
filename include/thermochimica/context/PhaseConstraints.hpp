@@ -32,7 +32,12 @@ struct PhaseConstraints {
     std::vector<PhaseConstraint> condPhaseConstraints;
 
     /// Penalty parameter (rho) for augmented Lagrangian method
+    /// This value grows during iteration; reset() restores it to initialPenaltyParameter
     double penaltyParameter = 1.0;
+
+    /// Initial penalty parameter (user-configurable via setConstraintPenaltyParameter)
+    /// reset() restores penaltyParameter to this value
+    double initialPenaltyParameter = 1.0;
 
     /// Growth rate for penalty parameter each outer iteration
     double penaltyGrowthRate = 10.0;
