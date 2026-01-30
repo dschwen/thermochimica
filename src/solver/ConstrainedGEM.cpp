@@ -291,10 +291,24 @@ bool ConstrainedGEM::setupAssemblageFromConstraints(ThermoContext& ctx) {
         }
     }
 
-    // Validate: total phases cannot exceed number of elements (Gibbs phase rule)
-    // If exceeded, writes to iAssemblage/dMolesPhase would go out of bounds
-    if (nConstrainedSoln + nConstrainedCond > thermo.nElements) {
-        // Too many constrained phases for this system
+    // Count active elements (those with non-zero input mass)
+    // The Gibbs phase rule limit is based on active elements, not total database elements
+    int nActiveElements = 0;
+    for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+        if (thermo.dMolesElement(j) > 0.0) {
+            nActiveElements++;
+        }
+    }
+
+    // Validate: total phases cannot exceed number of active elements (Gibbs phase rule)
+    // Using nElements for array bounds, but nActiveElements for thermodynamic validity
+    int nTotalConstrained = nConstrainedSoln + nConstrainedCond;
+    if (nTotalConstrained > nActiveElements) {
+        // Too many constrained phases for this system's active elements
+        return false;
+    }
+    // Also check array bounds (should be redundant but safety check)
+    if (nTotalConstrained > thermo.nElements) {
         return false;
     }
 
