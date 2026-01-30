@@ -286,6 +286,13 @@ bool ConstrainedGEM::setupAssemblageFromConstraints(ThermoContext& ctx) {
     }
     std::fill(gem.lSolnPhases.begin(), gem.lSolnPhases.end(), false);
 
+    // Clear species moles and mole fractions to avoid stale values from
+    // previously active phases contributing to mass balance calculations
+    for (int i = 0; i < thermo.nSpecies; ++i) {
+        thermo.dMolesSpecies(i) = 0.0;
+        thermo.dMolFraction(i) = 0.0;
+    }
+
     // Compute total element moles for initial estimates
     double totalElementMoles = 0.0;
     for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
