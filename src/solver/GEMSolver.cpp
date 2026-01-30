@@ -385,20 +385,22 @@ int GEMSolver::solve(ThermoContext& ctx) {
             return io.INFOThermo;
         }
 
-        if (!innerConverged) {
-            // Inner loop didn't converge - try continuing with current result
-            // The constraints might still improve
-        }
-
         // Compute current phase element fractions
         ConstrainedGEM::computePhaseElementFractions(ctx);
 
-        // Check if constraints are satisfied
-        if (pc.areConstraintsSatisfied()) {
-            // All constraints satisfied - we're done
+        // Check if both inner loop converged AND constraints are satisfied
+        // Both conditions are required for a valid thermodynamic state:
+        // - innerConverged ensures mass balance, phase rule, and chemical potentials are satisfied
+        // - areConstraintsSatisfied ensures phase fraction targets are met
+        if (innerConverged && pc.areConstraintsSatisfied()) {
+            // Full convergence achieved
             gem.lConverged = true;
             break;
         }
+
+        // If constraints are satisfied but inner loop didn't converge,
+        // we have an inconsistent thermodynamic state - keep iterating
+        // to try to achieve both conditions
 
         // Update Lagrange multipliers: λ += ρ * (f - f_target)
         ConstrainedGEM::updateLagrangeMultipliers(ctx);
@@ -408,11 +410,9 @@ int GEMSolver::solve(ThermoContext& ctx) {
     }
 
     // Check final convergence status
+    // gem.lConverged is only true if BOTH inner loop converged AND constraints satisfied
     if (!gem.lConverged && io.INFOThermo == 0) {
-        // Check if constraints are at least approximately satisfied
-        if (!pc.areConstraintsSatisfied()) {
-            io.INFOThermo = ErrorCode::kGEMSolverDidNotConverge;
-        }
+        io.INFOThermo = ErrorCode::kGEMSolverDidNotConverge;
     }
 
     return io.INFOThermo;
