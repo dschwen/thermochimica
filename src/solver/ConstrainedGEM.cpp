@@ -277,6 +277,27 @@ bool ConstrainedGEM::setupAssemblageFromConstraints(ThermoContext& ctx) {
         return false;
     }
 
+    // Count total number of constrained phases to validate against phase rule
+    int nConstrainedSoln = 0;
+    int nConstrainedCond = 0;
+    for (const auto& c : pc.solnPhaseConstraints) {
+        if (c.mode == PhaseConstraintMode::Fixed) {
+            nConstrainedSoln++;
+        }
+    }
+    for (const auto& c : pc.condPhaseConstraints) {
+        if (c.mode == PhaseConstraintMode::Fixed) {
+            nConstrainedCond++;
+        }
+    }
+
+    // Validate: total phases cannot exceed number of elements (Gibbs phase rule)
+    // If exceeded, writes to iAssemblage/dMolesPhase would go out of bounds
+    if (nConstrainedSoln + nConstrainedCond > thermo.nElements) {
+        // Too many constrained phases for this system
+        return false;
+    }
+
     // Clear existing assemblage
     thermo.nSolnPhases = 0;
     thermo.nConPhases = 0;
@@ -312,6 +333,14 @@ bool ConstrainedGEM::setupAssemblageFromConstraints(ThermoContext& ctx) {
         // Add this solution phase
         thermo.nSolnPhases++;
         int newIdx = thermo.nElements - thermo.nSolnPhases;
+
+        // Safety check: ensure index is valid (should be guaranteed by earlier validation)
+        if (newIdx < thermo.nConPhases || newIdx < 0) {
+            // Would overlap with condensed phases or go negative
+            thermo.nSolnPhases--;
+            return false;
+        }
+
         thermo.iAssemblage(newIdx) = -(iPhase + 1);
         gem.lSolnPhases[iPhase] = true;
 
@@ -378,6 +407,13 @@ bool ConstrainedGEM::setupAssemblageFromConstraints(ThermoContext& ctx) {
         int speciesIdx = nSolnSpecies + iCond;
         if (speciesIdx >= thermo.nSpecies) {
             continue;
+        }
+
+        // Safety check: ensure condensed phase index doesn't overlap with solution phases
+        // Solution phases occupy indices [nElements - nSolnPhases, nElements)
+        // Condensed phases occupy indices [0, nConPhases)
+        if (thermo.nConPhases >= thermo.nElements - thermo.nSolnPhases) {
+            return false;
         }
 
         // Add this pure condensed phase
