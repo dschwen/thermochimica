@@ -63,6 +63,10 @@ set(THERMO_SOURCES
     # Model classes (OO architecture)
     src/models/IdealMixingModel.cpp
     src/models/QKTOModel.cpp
+    src/models/RKMPModel.cpp
+    src/models/SUBLModel.cpp
+    src/models/SUBGModel.cpp
+    src/models/SUBQModel.cpp
     src/models/ModelFactory.cpp
 
     # Solver

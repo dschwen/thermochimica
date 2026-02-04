@@ -20,10 +20,10 @@ class IParser;
 class IThermodynamicModel;
 class PhaseAssemblageManager;
 class ModelFactory;
-class ThermoState;
-class ThermoIO;
-class GEMState;
-class PhaseConstraints;
+struct ThermoState;
+struct ThermoIO;
+struct GEMState;
+struct PhaseConstraints;
 
 /// @brief Main Thermochimica class for thermodynamic calculations
 /// @details Object-oriented interface using composition and strategy patterns.
