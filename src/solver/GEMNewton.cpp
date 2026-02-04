@@ -1,4 +1,5 @@
 #include "thermochimica/solver/GEMSolver.hpp"
+#include "thermochimica/context/PhaseConstraints.hpp"
 #include "thermochimica/util/Constants.hpp"
 #include <Eigen/LU>
 #include <cmath>
@@ -27,6 +28,12 @@ int GEMNewton::compute(ThermoContext& ctx) {
     Eigen::VectorXd rhs = Eigen::VectorXd::Zero(nVar);
 
     constructHessianReduced(ctx, hessian, rhs, activeElements);
+
+    // Add phase constraint penalty contributions to Newton system
+    if (ctx.phaseConstraints->hasActiveConstraints()) {
+        ConstrainedGEM::addConstraintGradients(ctx, rhs, activeElements);
+        ConstrainedGEM::addConstraintHessian(ctx, hessian, activeElements);
+    }
 
     static int debugNewtonCount = 0;
 

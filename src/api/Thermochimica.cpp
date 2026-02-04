@@ -1,6 +1,7 @@
 #include "thermochimica/Thermochimica.hpp"
 #include "thermochimica/parser/ChemSageParser.hpp"
 #include "thermochimica/solver/GEMSolver.hpp"
+#include "thermochimica/context/PhaseConstraints.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -319,6 +320,266 @@ void setWriteJSON(ThermoContext& ctx, bool enable) {
 void setHeatCapacityEntropyEnthalpy(ThermoContext& ctx, bool enable) {
     ctx.io->lHeatCapacityEntropyEnthalpy = enable;
 }
+
+// ============================================================================
+// Phase Constraint Functions
+// ============================================================================
+
+void setSolnPhaseConstraint(ThermoContext& ctx,
+                            const std::string& phaseName,
+                            double targetFraction) {
+    auto& pc = *ctx.phaseConstraints;
+    int phaseIdx = ctx.thermo->getPhaseIndex(phaseName);
+
+    if (phaseIdx < 0 || phaseIdx >= static_cast<int>(pc.solnPhaseConstraints.size())) {
+        // Phase not found in solution phases
+        return;
+    }
+
+    // Clamp target fraction to valid range
+    targetFraction = std::max(0.0, std::min(1.0, targetFraction));
+
+    pc.solnPhaseConstraints[phaseIdx].mode = PhaseConstraintMode::Fixed;
+    pc.solnPhaseConstraints[phaseIdx].targetFraction = targetFraction;
+    pc.solnPhaseConstraints[phaseIdx].lagrangeMultiplier = 0.0;
+}
+
+void setCondPhaseConstraint(ThermoContext& ctx,
+                            const std::string& speciesName,
+                            double targetFraction) {
+    auto& pc = *ctx.phaseConstraints;
+    int speciesIdx = ctx.thermo->getSpeciesIndex(speciesName);
+
+    if (speciesIdx < 0) {
+        return;  // Species not found
+    }
+
+    // Pure condensed species are indexed starting from nSpeciesInSolnPhases
+    int nSolnSpecies = ctx.thermo->nSpeciesPhase(ctx.thermo->nSolnPhasesSys);
+    int condIdx = speciesIdx - nSolnSpecies;
+
+    if (condIdx < 0 || condIdx >= static_cast<int>(pc.condPhaseConstraints.size())) {
+        return;  // Not a pure condensed species
+    }
+
+    // Clamp target fraction to valid range
+    targetFraction = std::max(0.0, std::min(1.0, targetFraction));
+
+    pc.condPhaseConstraints[condIdx].mode = PhaseConstraintMode::Fixed;
+    pc.condPhaseConstraints[condIdx].targetFraction = targetFraction;
+    pc.condPhaseConstraints[condIdx].lagrangeMultiplier = 0.0;
+}
+
+void setPhaseConstraint(ThermoContext& ctx,
+                        int phaseIndex,
+                        bool isSolutionPhase,
+                        double targetFraction) {
+    auto& pc = *ctx.phaseConstraints;
+
+    // Clamp target fraction to valid range
+    targetFraction = std::max(0.0, std::min(1.0, targetFraction));
+
+    if (isSolutionPhase) {
+        if (phaseIndex >= 0 && phaseIndex < static_cast<int>(pc.solnPhaseConstraints.size())) {
+            pc.solnPhaseConstraints[phaseIndex].mode = PhaseConstraintMode::Fixed;
+            pc.solnPhaseConstraints[phaseIndex].targetFraction = targetFraction;
+            pc.solnPhaseConstraints[phaseIndex].lagrangeMultiplier = 0.0;
+        }
+    } else {
+        if (phaseIndex >= 0 && phaseIndex < static_cast<int>(pc.condPhaseConstraints.size())) {
+            pc.condPhaseConstraints[phaseIndex].mode = PhaseConstraintMode::Fixed;
+            pc.condPhaseConstraints[phaseIndex].targetFraction = targetFraction;
+            pc.condPhaseConstraints[phaseIndex].lagrangeMultiplier = 0.0;
+        }
+    }
+}
+
+void removePhaseConstraint(ThermoContext& ctx, const std::string& phaseName) {
+    auto& pc = *ctx.phaseConstraints;
+
+    // Try as solution phase first
+    int phaseIdx = ctx.thermo->getPhaseIndex(phaseName);
+    if (phaseIdx >= 0 && phaseIdx < static_cast<int>(pc.solnPhaseConstraints.size())) {
+        pc.solnPhaseConstraints[phaseIdx].mode = PhaseConstraintMode::None;
+        pc.solnPhaseConstraints[phaseIdx].targetFraction = 0.0;
+        pc.solnPhaseConstraints[phaseIdx].lagrangeMultiplier = 0.0;
+        return;
+    }
+
+    // Try as pure condensed species
+    int speciesIdx = ctx.thermo->getSpeciesIndex(phaseName);
+    if (speciesIdx >= 0) {
+        int nSolnSpecies = ctx.thermo->nSpeciesPhase(ctx.thermo->nSolnPhasesSys);
+        int condIdx = speciesIdx - nSolnSpecies;
+        if (condIdx >= 0 && condIdx < static_cast<int>(pc.condPhaseConstraints.size())) {
+            pc.condPhaseConstraints[condIdx].mode = PhaseConstraintMode::None;
+            pc.condPhaseConstraints[condIdx].targetFraction = 0.0;
+            pc.condPhaseConstraints[condIdx].lagrangeMultiplier = 0.0;
+        }
+    }
+}
+
+void clearPhaseConstraints(ThermoContext& ctx) {
+    ctx.phaseConstraints->clear();
+}
+
+std::pair<double, int> getPhaseElementFraction(const ThermoContext& ctx,
+                                               const std::string& phaseName) {
+    auto& thermo = *ctx.thermo;
+
+    // Compute total element moles in system
+    double totalElementMoles = 0.0;
+    for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+        totalElementMoles += thermo.dMolesElement(j);
+    }
+
+    if (totalElementMoles <= 0.0) {
+        return {0.0, -1};  // No elements in system
+    }
+
+    // Try as solution phase first
+    int phaseIdx = thermo.getPhaseIndex(phaseName);
+    if (phaseIdx >= 0 && phaseIdx < thermo.nSolnPhasesSys) {
+        // Check if phase is in the current assemblage
+        // (species moles may be stale if phase was removed)
+        bool inAssemblage = false;
+        for (int i = thermo.nElements - thermo.nSolnPhases; i < thermo.nElements; ++i) {
+            if (thermo.iAssemblage(i) == -(phaseIdx + 1)) {
+                inAssemblage = true;
+                break;
+            }
+        }
+
+        if (!inAssemblage) {
+            return {0.0, 0};  // Phase not in assemblage, fraction is zero
+        }
+
+        // Sum element moles in this phase
+        double phaseElementMoles = 0.0;
+        int iFirst = (phaseIdx > 0) ? thermo.nSpeciesPhase(phaseIdx) : 0;
+        int iLast = thermo.nSpeciesPhase(phaseIdx + 1);
+
+        for (int i = iFirst; i < iLast; ++i) {
+            // dStoichSpecies is stored multiplied by iParticlesPerMole, so divide to get
+            // the actual stoichiometry coefficient (consistent with mass balance equations)
+            double ppm = static_cast<double>(thermo.iParticlesPerMole(i));
+            for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+                phaseElementMoles += thermo.dMolesSpecies(i) * thermo.dStoichSpecies(i, j) / ppm;
+            }
+        }
+
+        return {phaseElementMoles / totalElementMoles, 0};
+    }
+
+    // Try as pure condensed species
+    int speciesIdx = thermo.getSpeciesIndex(phaseName);
+    if (speciesIdx >= 0) {
+        // Check if species is in the current assemblage
+        bool inAssemblage = false;
+        for (int i = 0; i < thermo.nConPhases; ++i) {
+            if (thermo.iAssemblage(i) == speciesIdx + 1) {
+                inAssemblage = true;
+                break;
+            }
+        }
+
+        if (!inAssemblage) {
+            return {0.0, 0};  // Species not in assemblage, fraction is zero
+        }
+
+        // Sum element moles from this species
+        // dStoichSpecies is stored multiplied by iParticlesPerMole, so divide to get
+        // the actual stoichiometry coefficient (consistent with mass balance equations)
+        double ppm = static_cast<double>(thermo.iParticlesPerMole(speciesIdx));
+        double speciesElementMoles = 0.0;
+        for (int j = 0; j < thermo.nElements - thermo.nChargedConstraints; ++j) {
+            speciesElementMoles += thermo.dMolesSpecies(speciesIdx) * thermo.dStoichSpecies(speciesIdx, j) / ppm;
+        }
+
+        return {speciesElementMoles / totalElementMoles, 0};
+    }
+
+    return {0.0, -1};  // Phase not found
+}
+
+bool arePhaseConstraintsSatisfied(const ThermoContext& ctx) {
+    return ctx.phaseConstraints->areConstraintsSatisfied();
+}
+
+std::vector<double> getAllElementChemicalPotentials(const ThermoContext& ctx) {
+    auto& thermo = *ctx.thermo;
+    std::vector<double> potentials(thermo.nElements);
+    for (int j = 0; j < thermo.nElements; ++j) {
+        potentials[j] = thermo.dElementPotential(j);
+    }
+    return potentials;
+}
+
+std::pair<double, int> getElementChemicalPotential(const ThermoContext& ctx, int elementIndex) {
+    auto& thermo = *ctx.thermo;
+    if (elementIndex < 0 || elementIndex >= thermo.nElements) {
+        return {0.0, -1};
+    }
+    return {thermo.dElementPotential(elementIndex), 0};
+}
+
+std::pair<double, int> getGibbsEnergyDerivative(const ThermoContext& ctx,
+                                                 const std::string& phaseName) {
+    auto& thermo = *ctx.thermo;
+    auto& pc = *ctx.phaseConstraints;
+
+    // Check solution phases first
+    int phaseIdx = thermo.getPhaseIndex(phaseName);
+    if (phaseIdx >= 0 && phaseIdx < static_cast<int>(pc.solnPhaseConstraints.size())) {
+        auto& c = pc.solnPhaseConstraints[phaseIdx];
+        if (c.mode == PhaseConstraintMode::Fixed) {
+            // dG/df = -λ (negative Lagrange multiplier)
+            // The Lagrange multiplier is dimensionless (divided by RT internally)
+            // To return in J, multiply by RT
+            double R = 8.314462618;  // J/(mol·K)
+            double T = ctx.io->dTemperature;
+            return {-c.lagrangeMultiplier * R * T, 0};
+        }
+        // Phase exists but no constraint - derivative is 0 at equilibrium
+        return {0.0, 0};
+    }
+
+    // Check pure condensed phases
+    int speciesIdx = thermo.getSpeciesIndex(phaseName);
+    if (speciesIdx >= 0) {
+        int nSolnSpecies = thermo.nSpeciesPhase(thermo.nSolnPhasesSys);
+        int condIdx = speciesIdx - nSolnSpecies;
+        if (condIdx >= 0 && condIdx < static_cast<int>(pc.condPhaseConstraints.size())) {
+            auto& c = pc.condPhaseConstraints[condIdx];
+            if (c.mode == PhaseConstraintMode::Fixed) {
+                double R = 8.314462618;
+                double T = ctx.io->dTemperature;
+                return {-c.lagrangeMultiplier * R * T, 0};
+            }
+            return {0.0, 0};
+        }
+    }
+
+    return {0.0, -1};  // Phase not found
+}
+
+void setConstraintTolerance(ThermoContext& ctx, double tolerance) {
+    ctx.phaseConstraints->constraintTolerance = std::max(1e-10, tolerance);
+}
+
+void setConstraintPenaltyParameter(ThermoContext& ctx, double rho) {
+    double value = std::max(1e-10, rho);
+    ctx.phaseConstraints->penaltyParameter = value;
+    ctx.phaseConstraints->initialPenaltyParameter = value;
+}
+
+void setConstraintMaxOuterIterations(ThermoContext& ctx, int maxIter) {
+    ctx.phaseConstraints->maxOuterIterations = std::max(1, maxIter);
+}
+
+// ============================================================================
+// Output Retrieval Functions
+// ============================================================================
 
 std::pair<double, int> getOutputChemPot(const ThermoContext& ctx,
                                         const std::string& elementName) {

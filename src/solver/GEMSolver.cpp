@@ -1,4 +1,5 @@
 #include "thermochimica/solver/GEMSolver.hpp"
+#include "thermochimica/context/PhaseConstraints.hpp"
 #include "thermochimica/util/ErrorCodes.hpp"
 #include "thermochimica/util/Constants.hpp"
 #include <cmath>
@@ -83,20 +84,17 @@ static void computeChemicalPotentials(ThermoContext& ctx) {
     }
 }
 
-int GEMSolver::solve(ThermoContext& ctx) {
+/// Run inner GEM iteration loop (standard or with constraints)
+/// @return true if converged
+static bool runInnerGEMLoop(ThermoContext& ctx) {
     auto& io = *ctx.io;
     auto& gem = *ctx.gem;
     auto& thermo = *ctx.thermo;
+    auto& pc = *ctx.phaseConstraints;
 
-    // Initialize the GEM solver
-    init(ctx);
+    bool hasConstraints = pc.hasActiveConstraints();
 
-    // Check if system with only pure condensed phases is already converged
-    if (thermo.nSolnPhases == 0 && io.INFOThermo == 0 && !io.lReinitLoaded) {
-        checkSysOnlyPureConPhases(ctx);
-    }
-
-    // Main iteration loop
+    // Main inner iteration loop
     for (gem.iterGlobal = 1; gem.iterGlobal <= Constants::kIterGlobalMax; ++gem.iterGlobal) {
         // Compute chemical potentials for solution phases (includes excess Gibbs)
         if (thermo.nSolnPhases > 0) {
@@ -206,14 +204,14 @@ int GEMSolver::solve(ThermoContext& ctx) {
         // Note: Skip Newton when nSolnPhases=0 because the Hessian is singular without
         // solution phase contributions. Phase assemblage will handle adding solution phases.
         //
-        // IMPORTANT: Skip Newton for now as it's causing phase moles to explode.
-        // The simplified single-phase approach below handles the common case.
-        if (false && thermo.nSolnPhases > 0 && thermo.nConPhases > 0) {
-            // Full Newton when we have both solution and condensed phases
-            GEMNewton::compute(ctx);
-            GEMLineSearch::search(ctx);
-        } else if (thermo.nSolnPhases >= 1 && thermo.nConPhases == 0) {
+        // For constrained solves, use a specialized update that adjusts phase moles
+        // to satisfy the target phase fractions while maintaining mass balance.
+        if (hasConstraints && thermo.nSolnPhases > 0) {
+            // Constrained solve: directly adjust phase moles toward target fractions
+            ConstrainedGEM::updateConstrainedPhaseMoles(ctx);
+        } else if (thermo.nSolnPhases >= 1 && thermo.nConPhases == 0 && !hasConstraints) {
             // Solution phases only, no condensed phases: simpler update
+            // Skip this when constraints are active - phase moles are controlled by constraints
             // First, recalculate phase moles to satisfy mass balance
             for (int iPhase = 0; iPhase < thermo.nSolnPhases; ++iPhase) {
                 int assembIdx = thermo.nElements - thermo.nSolnPhases + iPhase;
@@ -295,8 +293,15 @@ int GEMSolver::solve(ThermoContext& ctx) {
             }
         }
 
-        // Check phase assemblage
-        PhaseAssemblage::check(ctx);
+        // Check phase assemblage (only if no constraints - constrained mode uses fixed assemblage)
+        if (!hasConstraints) {
+            PhaseAssemblage::check(ctx);
+        }
+
+        // If constraints are active, compute current phase fractions
+        if (hasConstraints) {
+            ConstrainedGEM::computePhaseElementFractions(ctx);
+        }
 
         // Check convergence
         gem.lConverged = ConvergenceChecker::check(ctx);
@@ -307,7 +312,104 @@ int GEMSolver::solve(ThermoContext& ctx) {
         }
     }
 
-    // Report error if not converged
+    return gem.lConverged;
+}
+
+int GEMSolver::solve(ThermoContext& ctx) {
+    auto& io = *ctx.io;
+    auto& gem = *ctx.gem;
+    auto& thermo = *ctx.thermo;
+    auto& pc = *ctx.phaseConstraints;
+
+    // Initialize the GEM solver
+    init(ctx);
+
+    // Check if system with only pure condensed phases is already converged
+    if (thermo.nSolnPhases == 0 && io.INFOThermo == 0 && !io.lReinitLoaded) {
+        checkSysOnlyPureConPhases(ctx);
+    }
+
+    // Check if phase constraints are active
+    if (!pc.hasActiveConstraints()) {
+        // Standard unconstrained GEM solve
+        bool converged = runInnerGEMLoop(ctx);
+
+        if (!converged && io.INFOThermo == 0) {
+            io.INFOThermo = ErrorCode::kGEMSolverDidNotConverge;
+        }
+
+        return io.INFOThermo;
+    }
+
+    // =========================================================================
+    // Augmented Lagrangian outer loop for constrained GEM
+    // =========================================================================
+
+    // Set up assemblage directly from constraints
+    // For phase field: constrained phases are forced in, others excluded
+    if (!ConstrainedGEM::setupAssemblageFromConstraints(ctx)) {
+        io.INFOThermo = ErrorCode::kGEMSolverDidNotConverge;
+        return io.INFOThermo;
+    }
+
+    // Reset constraint state
+    pc.reset();
+
+    for (pc.currentOuterIteration = 0;
+         pc.currentOuterIteration < pc.maxOuterIterations;
+         ++pc.currentOuterIteration) {
+
+        // Reset inner solver state for new outer iteration
+        gem.reset();
+        gem.lConverged = false;
+
+        // Re-initialize lSolnPhases from assemblage since reset() cleared it
+        // and PhaseAssemblage::check is skipped in constrained mode
+        for (int i = 0; i < thermo.nElements; ++i) {
+            int idx = thermo.iAssemblage(i);
+            if (idx < 0) {
+                // Negative index indicates solution phase
+                int phaseIdx = -idx - 1;
+                if (phaseIdx >= 0 && phaseIdx < static_cast<int>(gem.lSolnPhases.size())) {
+                    gem.lSolnPhases[phaseIdx] = true;
+                }
+            }
+        }
+
+        // Run inner GEM loop with current Lagrange multipliers and penalty
+        bool innerConverged = runInnerGEMLoop(ctx);
+
+        if (io.INFOThermo != 0) {
+            // Error in inner loop
+            return io.INFOThermo;
+        }
+
+        // Compute current phase element fractions
+        ConstrainedGEM::computePhaseElementFractions(ctx);
+
+        // Check if both inner loop converged AND constraints are satisfied
+        // Both conditions are required for a valid thermodynamic state:
+        // - innerConverged ensures mass balance, phase rule, and chemical potentials are satisfied
+        // - areConstraintsSatisfied ensures phase fraction targets are met
+        if (innerConverged && pc.areConstraintsSatisfied()) {
+            // Full convergence achieved
+            gem.lConverged = true;
+            break;
+        }
+
+        // If constraints are satisfied but inner loop didn't converge,
+        // we have an inconsistent thermodynamic state - keep iterating
+        // to try to achieve both conditions
+
+        // Update Lagrange multipliers: λ += ρ * (f - f_target)
+        ConstrainedGEM::updateLagrangeMultipliers(ctx);
+
+        // Increase penalty parameter for next outer iteration
+        pc.penaltyParameter *= pc.penaltyGrowthRate;
+    }
+
+    // Check final convergence status
+    // gem.lConverged is only true if BOTH inner loop converged AND constraints satisfied
     if (!gem.lConverged && io.INFOThermo == 0) {
         io.INFOThermo = ErrorCode::kGEMSolverDidNotConverge;
     }

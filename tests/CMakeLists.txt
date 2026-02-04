@@ -26,6 +26,7 @@ gtest_discover_tests(unit_tests)
 add_executable(integration_tests
     integration/TestThermo01.cpp
     integration/TestThermo.cpp
+    integration/TestPhaseConstraints.cpp
 )
 
 target_link_libraries(integration_tests

@@ -414,4 +414,92 @@ int main() {
 
 ---
 
+## Phase Fraction Constraints
+
+Constrain phase fractions for phase field modeling applications.
+
+### Fixed Assemblage Mode
+
+When constraints are active, Thermochimica uses a **fixed assemblage mode**:
+
+- **Constrained phases are forced into the assemblage** - regardless of thermodynamic stability
+- **Unconstrained phases are excluded** - not included in the calculation
+- **Constraints must sum to ~1.0** - all element mass must be accounted for
+
+This is designed for phase field coupling where the mesoscale simulation imposes phase fractions, and Thermochimica computes the resulting chemical potentials and compositions.
+
+### Two-Phase Constraint Example
+
+```cpp
+#include <thermochimica/Thermochimica.hpp>
+#include <iostream>
+
+int main() {
+    Thermochimica::ThermoContext ctx;
+
+    Thermochimica::setStandardUnits(ctx);
+    Thermochimica::setThermoFilename(ctx, "data/NobleMetals-Kaye.dat");
+    Thermochimica::parseCSDataFile(ctx);
+
+    // Set conditions
+    Thermochimica::setTemperaturePressure(ctx, 1500.0, 1.0);
+    Thermochimica::setElementMass(ctx, 42, 0.5);  // Mo
+    Thermochimica::setElementMass(ctx, 44, 0.5);  // Ru
+
+    // Constrain TWO phases with fractions summing to 1.0
+    // This is required: all element mass must go into constrained phases
+    Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);
+    Thermochimica::setSolnPhaseConstraint(ctx, "BCCN", 0.6);
+
+    // Optionally adjust solver parameters
+    Thermochimica::setConstraintTolerance(ctx, 1e-4);
+    Thermochimica::setConstraintMaxOuterIterations(ctx, 30);
+
+    Thermochimica::thermochimica(ctx);
+
+    if (ctx.isSuccess()) {
+        auto [fcc_frac, fcc_info] = Thermochimica::getPhaseElementFraction(ctx, "FCCN");
+        auto [bcc_frac, bcc_info] = Thermochimica::getPhaseElementFraction(ctx, "BCCN");
+        std::cout << "FCCN fraction: " << fcc_frac << "\n";  // ~0.4
+        std::cout << "BCCN fraction: " << bcc_frac << "\n";  // ~0.6
+
+        // Check constraint satisfaction
+        if (Thermochimica::arePhaseConstraintsSatisfied(ctx)) {
+            std::cout << "All phase constraints satisfied.\n";
+        }
+    }
+
+    // Clean up constraints for next calculation
+    Thermochimica::clearPhaseConstraints(ctx);
+
+    return 0;
+}
+```
+
+### Important Notes
+
+**Constraints must account for all mass:**
+```cpp
+// CORRECT: fractions sum to 1.0
+Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);
+Thermochimica::setSolnPhaseConstraint(ctx, "BCCN", 0.6);
+
+// INCORRECT: single constraint without accounting for remaining mass
+// The phase will end up at 1.0 (100%) since it's the only phase present
+Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);  // Will actually be 1.0!
+```
+
+**Managing constraints:**
+```cpp
+// Remove a single constraint
+Thermochimica::removePhaseConstraint(ctx, "BCCN");
+
+// Clear all constraints (returns to unconstrained equilibrium mode)
+Thermochimica::clearPhaseConstraints(ctx);
+```
+
+**Phase fraction definition:** Phase fraction is defined at the element level as `(sum of element moles in phase) / (total element moles in system)`. This differs from mole fraction, making it suitable for phase field applications where you track the spatial distribution of phases.
+
+---
+
 [← Back to README](../README.md) | [Databases](databases.md) | [Error Handling →](error-handling.md)

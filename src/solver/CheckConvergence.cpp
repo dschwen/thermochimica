@@ -1,4 +1,5 @@
 #include "thermochimica/solver/GEMSolver.hpp"
+#include "thermochimica/context/PhaseConstraints.hpp"
 #include "thermochimica/util/Constants.hpp"
 #include <cmath>
 #include <algorithm>
@@ -76,8 +77,13 @@ bool ConvergenceChecker::check(ThermoContext& ctx) {
     }
 
     // 7. Unstable solution phases
-    if (!checkUnstablePhases(ctx)) {
-        return false;
+    // Skip this check when constraints are active - we intentionally force a fixed
+    // assemblage and exclude unconstrained phases. Checking unstable phases would
+    // prevent convergence if any excluded phase has positive driving force.
+    if (!ctx.phaseConstraints->hasActiveConstraints()) {
+        if (!checkUnstablePhases(ctx)) {
+            return false;
+        }
     }
 
     // 8. Miscibility gaps
@@ -85,8 +91,23 @@ bool ConvergenceChecker::check(ThermoContext& ctx) {
         return false;
     }
 
+    // 9. Phase constraints (if active)
+    // Note: This is checked in inner loop to help guide phase assemblage,
+    // but final constraint satisfaction is checked in outer loop
+    // So we don't fail here - just let the outer loop handle it
+
     // All checks passed
     return true;
+}
+
+bool ConvergenceChecker::checkPhaseConstraints(ThermoContext& ctx) {
+    auto& pc = *ctx.phaseConstraints;
+
+    if (!pc.hasActiveConstraints()) {
+        return true;  // No constraints to check
+    }
+
+    return pc.areConstraintsSatisfied();
 }
 
 bool ConvergenceChecker::checkMassBalance(ThermoContext& ctx) {
