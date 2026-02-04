@@ -13,6 +13,7 @@ endif()
 add_executable(unit_tests
     unit/test_context.cpp
     test_ThermoClass.cpp
+    test_ModelValidation.cpp
 )
 
 target_link_libraries(unit_tests
