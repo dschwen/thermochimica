@@ -1,0 +1,72 @@
+{
+  "test_cases": [
+    {
+      "name": "CO_1000K_Ideal",
+      "database": "CO.dat",
+      "temperature": 1000.0,
+      "pressure": 1.0,
+      "composition": {
+        "C": 1.0,
+        "O": 2.0
+      },
+      "reference": {
+        "gibbs": -432000.0
+      }
+    },
+    {
+      "name": "MoRu_2250K_RKMP",
+      "database": "NobleMetals-Kaye.dat",
+      "temperature": 2250.0,
+      "pressure": 1.0,
+      "composition": {
+        "Mo": 0.5,
+        "Ru": 0.5
+      },
+      "reference": {
+        "gibbs": -156000.0
+      }
+    },
+    {
+      "name": "FeTiVO_1500K_SUBL",
+      "database": "FeTiVO.dat",
+      "temperature": 1500.0,
+      "pressure": 1.0,
+      "composition": {
+        "Fe": 1.0,
+        "Ti": 0.5,
+        "V": 0.5,
+        "O": 2.0
+      }
+    },
+    {
+      "name": "CsI_1000K_SUBG",
+      "database": "CsI-Pham.dat",
+      "temperature": 1000.0,
+      "pressure": 1.0,
+      "composition": {
+        "Cs": 1.0,
+        "I": 1.0
+      }
+    },
+    {
+      "name": "ZrO_1000K_SUBQ",
+      "database": "ZIRC-noSUBI.dat",
+      "temperature": 1000.0,
+      "pressure": 1.0,
+      "composition": {
+        "Zr": 1.0,
+        "O": 2.0
+      }
+    },
+    {
+      "name": "CO_2000K_HighTemp",
+      "database": "CO.dat",
+      "temperature": 2000.0,
+      "pressure": 1.0,
+      "composition": {
+        "C": 1.0,
+        "O": 2.0
+      }
+    }
+  ]
+}
