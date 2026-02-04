@@ -60,14 +60,23 @@ set(THERMO_SOURCES
     src/models/SUBL.cpp
     src/models/SUBG.cpp
     src/models/SUBQ.cpp
+    # Model classes (OO architecture)
+    src/models/IdealMixingModel.cpp
+    src/models/QKTOModel.cpp
+    src/models/ModelFactory.cpp
 
     # Solver
     src/solver/GEMSolver.cpp
+    src/solver/StandardGEMSolver.cpp
+    src/solver/ConstrainedGEMSolver.cpp
     src/solver/GEMNewton.cpp
+    src/solver/NewtonSolver.cpp
     src/solver/GEMLineSearch.cpp
+    src/solver/WolfeLineSearch.cpp
     src/solver/LevelingSolver.cpp
     src/solver/Subminimization.cpp
     src/solver/PhaseAssemblage.cpp
+    src/solver/PhaseAssemblageManager.cpp
     src/solver/CheckConvergence.cpp
     src/solver/ConstrainedGEM.cpp
 
@@ -78,6 +87,7 @@ set(THERMO_SOURCES
 
     # API
     src/api/Thermochimica.cpp
+    src/api/ThermoClass.cpp
     src/api/CouplingAPI.cpp
 )
 
