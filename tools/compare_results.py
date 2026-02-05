@@ -20,8 +20,15 @@ def compare_results(cpp_file, fortran_file, tolerance=1e-3):
     cpp_results = cpp_data['results']
     fortran_results = fortran_data.get('results', fortran_data)
 
-    # Handle case where fortran output might be a list directly
-    if isinstance(fortran_results, dict) and 'results' in fortran_results:
+    # Handle case where fortran output uses numbered keys ("1", "2", "3", ...)
+    if isinstance(fortran_results, dict) and '1' in fortran_results:
+        # Convert numbered dict to list
+        fortran_list = []
+        for i in range(1, len(cpp_results) + 1):
+            if str(i) in fortran_results:
+                fortran_list.append(fortran_results[str(i)])
+        fortran_results = fortran_list
+    elif isinstance(fortran_results, dict) and 'results' in fortran_results:
         fortran_results = fortran_results['results']
 
     print(f"Comparing {len(cpp_results)} test cases...")
@@ -55,7 +62,10 @@ def compare_results(cpp_file, fortran_file, tolerance=1e-3):
             continue
 
         cpp_g = cpp['gibbs_energy']
-        fortran_g = fortran.get('gibbs_energy', fortran.get('gibbs', 0.0))
+        # Handle different field names in Fortran output
+        fortran_g = fortran.get('gibbs_energy',
+                                 fortran.get('gibbs',
+                                 fortran.get('integral Gibbs energy', 0.0)))
 
         diff = abs(cpp_g - fortran_g)
         rel_diff = abs(diff / fortran_g) if abs(fortran_g) > 1e-10 else 0
