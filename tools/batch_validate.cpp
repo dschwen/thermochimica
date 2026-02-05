@@ -275,8 +275,18 @@ TestResult runTestCase(const TestCase& testCase) {
         result.success = true;
         result.gibbs = thermo.getGibbsEnergy();
 
-        // Get phase amounts (we don't know phase names ahead of time, so skip for now)
-        // In a real implementation, you'd query the database for phase names
+        // Try common phase names from CO system
+        std::vector<std::string> commonPhases = {
+            "gas_ideal", "gas", "GAS_IDEAL",
+            "C_Graphite(s)", "C_Graphite", "Graphite"
+        };
+
+        for (const auto& phaseName : commonPhases) {
+            auto [moles, info] = thermo.getMolesPhase(phaseName);
+            if (info == 0 && moles > 1e-10) {
+                result.phases[phaseName] = moles;
+            }
+        }
 
         // Get chemical potentials for elements in composition
         for (const auto& [element, mass] : testCase.composition) {
@@ -334,6 +344,16 @@ void writeResults(const std::string& filename, const std::vector<TestResult>& re
         for (const auto& [elem, val] : r.chemPot) {
             file << "        \"" << elem << "\": " << val;
             if (++cpCount < r.chemPot.size()) file << ",";
+            file << "\n";
+        }
+        file << "      },\n";
+
+        // Phase assemblage
+        file << "      \"phases\": {\n";
+        size_t phaseCount = 0;
+        for (const auto& [phaseName, moles] : r.phases) {
+            file << "        \"" << phaseName << "\": " << moles;
+            if (++phaseCount < r.phases.size()) file << ",";
             file << "\n";
         }
         file << "      }";
