@@ -10,7 +10,17 @@ target_link_libraries(batch_validate
         thermochimica
 )
 
-# Install the tool
-install(TARGETS batch_validate
+# Graphite diagnostic tool
+add_executable(diagnose_graphite
+    diagnose_graphite.cpp
+)
+
+target_link_libraries(diagnose_graphite
+    PRIVATE
+        thermochimica
+)
+
+# Install the tools
+install(TARGETS batch_validate diagnose_graphite
     RUNTIME DESTINATION bin
 )
