@@ -345,6 +345,13 @@ bool PhaseAssemblageManager::addPureConPhase(int speciesIndex) {
         return false;
     }
 
+    // Prevent duplicate pure condensed phases
+    for (int i = 0; i < state_.nConPhases; ++i) {
+        if (state_.iAssemblage(i) == speciesIndex + 1) {
+            return false;
+        }
+    }
+
     // Count active elements
     int nActiveElements = 0;
     for (int j = 0; j < state_.nElements - state_.nChargedConstraints; ++j) {
@@ -388,6 +395,10 @@ bool PhaseAssemblageManager::removePureConPhase(int speciesIndex) {
 
     // Save current assemblage
     saveCurrentAssemblage();
+
+    // Clear species moles for the removed pure phase
+    state_.dMolesSpecies(speciesIndex) = 0.0;
+    state_.dMolFraction(speciesIndex) = 0.0;
 
     // Shift assemblage entries
     for (int i = phaseIdx; i < state_.nConPhases - 1; ++i) {
