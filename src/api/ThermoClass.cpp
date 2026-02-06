@@ -23,6 +23,8 @@
 #include "thermochimica/context/GEMState.hpp"
 #include "thermochimica/context/PhaseConstraints.hpp"
 
+#include <vector>
+
 namespace Thermochimica {
 
 ThermoClass::ThermoClass()
@@ -172,10 +174,27 @@ void ThermoClass::clearPhaseConstraints() {
 // =========================================================================
 
 int ThermoClass::calculate() {
-    // Use legacy thermochimica() for now
-    // Future: refactor to use strategy instances directly
-    Thermochimica::thermochimica(context_);
-    return context_.infoThermo();
+    initialize();
+    if (context_.infoThermo() != 0) {
+        return context_.infoThermo();
+    }
+
+    checkSystem();
+    if (context_.infoThermo() != 0) {
+        return context_.infoThermo();
+    }
+
+    computeThermoData();
+    if (context_.infoThermo() != 0) {
+        return context_.infoThermo();
+    }
+
+    setup();
+    if (context_.infoThermo() != 0) {
+        return context_.infoThermo();
+    }
+
+    return solve();
 }
 
 // =========================================================================
@@ -195,14 +214,43 @@ void ThermoClass::computeThermoData() {
 }
 
 void ThermoClass::setup() {
-    // Setup combines checkSystem + computeThermoData + other initialization
-    initialize();
+    Thermochimica::setup(context_);
 }
 
 int ThermoClass::solve() {
-    // Direct solver invocation (future implementation)
-    // For now, delegate to legacy code
-    return calculate();
+    if (!solver_) {
+        solver_ = std::make_unique<StandardGEMSolver>();
+    }
+    if (!newtonSolver_) {
+        newtonSolver_ = std::make_unique<NewtonSolver>(*io_, phaseConstraints_);
+    }
+    if (!lineSearch_) {
+        lineSearch_ = std::make_unique<WolfeLineSearch>();
+    }
+    if (!phaseManager_) {
+        phaseManager_ = std::make_unique<PhaseAssemblageManager>(*state_, *gemState_, *io_);
+    }
+    if (!modelFactory_) {
+        modelFactory_ = std::make_unique<ModelFactory>();
+    }
+
+    std::vector<IThermodynamicModel*> models;
+    for (const auto type : modelFactory_->getRegisteredTypes()) {
+        if (auto* model = modelFactory_->getModel(type)) {
+            models.push_back(model);
+        }
+    }
+
+    int result = solver_->solve(*state_, *io_, *gemState_, *phaseManager_,
+                                *newtonSolver_, *lineSearch_, models);
+
+    if (result != 0) {
+        context_.setInfoThermo(result);
+        return context_.infoThermo();
+    }
+
+    Thermochimica::postProcess(context_);
+    return context_.infoThermo();
 }
 
 // =========================================================================

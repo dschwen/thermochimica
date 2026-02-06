@@ -281,8 +281,8 @@ bool PhaseAssemblageManager::addSolnPhase(int phaseIndex) {
 
     // Add the phase
     ++state_.nSolnPhases;
-    int newPhaseIdx = state_.nElements - state_.nSolnPhases + (state_.nSolnPhases - 1);
-    state_.iAssemblage(state_.nElements + state_.nSolnPhases - 1) = -(phaseIndex + 1);
+    int newPhaseIdx = state_.nElements - state_.nSolnPhases;
+    state_.iAssemblage(newPhaseIdx) = -(phaseIndex + 1);
     gemState_.lSolnPhases[phaseIndex] = true;
 
     // Initialize phase moles
