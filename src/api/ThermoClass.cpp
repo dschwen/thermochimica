@@ -68,7 +68,20 @@ void ThermoClass::setThermoFilename(const std::string& filename) {
 }
 
 int ThermoClass::parseCSDataFile() {
-    Thermochimica::parseCSDataFile(context_);
+    // Use injected parser if available, otherwise fall back to legacy parser
+    if (parser_) {
+        int result = parser_->parse(io_->cThermoFileName,
+                                   *state_,
+                                   *io_,
+                                   *context_.parser);
+        context_.setInfoThermo(result);
+        if (result == 0) {
+            context_.allocateFromParser();
+        }
+    } else {
+        // Fall back to legacy free-function parser for backward compatibility
+        Thermochimica::parseCSDataFile(context_);
+    }
     return context_.infoThermo();
 }
 
