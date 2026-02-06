@@ -129,7 +129,8 @@ void PhaseAssemblageManager::check() {
         if (state_.dMolesPhase(phaseIdx) < state_.tolerances[kTolPhaseMoles]) {
             int solnIdx = -state_.iAssemblage(phaseIdx) - 1;
             if (solnIdx >= 0) {
-                removeSolnPhase(solnIdx);
+                // Pass assemblage index i, not system phase index solnIdx
+                removeSolnPhase(i);
                 gemState_.iterLast = gemState_.iterGlobal;
                 return;
             }
