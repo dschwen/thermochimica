@@ -20,7 +20,27 @@ target_link_libraries(diagnose_graphite
         thermochimica
 )
 
+# Enhanced diagnostic with trace
+add_executable(diagnose_with_trace
+    diagnose_with_trace.cpp
+)
+
+target_link_libraries(diagnose_with_trace
+    PRIVATE
+        thermochimica
+)
+
+# Element order checker
+add_executable(check_elements
+    check_elements.cpp
+)
+
+target_link_libraries(check_elements
+    PRIVATE
+        thermochimica
+)
+
 # Install the tools
-install(TARGETS batch_validate diagnose_graphite
+install(TARGETS batch_validate diagnose_graphite diagnose_with_trace
     RUNTIME DESTINATION bin
 )

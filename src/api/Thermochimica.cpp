@@ -629,15 +629,24 @@ std::pair<double, int> getMolesPhase(const ThermoContext& ctx,
                                      const std::string& phaseName) {
     auto& thermo = *ctx.thermo;
 
+    // Try as solution phase first
     int phaseIdx = thermo.getPhaseIndex(phaseName);
-    if (phaseIdx < 0) {
-        return {0.0, -1};
+    if (phaseIdx >= 0) {
+        // Find solution phase in assemblage
+        for (int i = 0; i < thermo.nElements; ++i) {
+            if (thermo.iAssemblage(i) == -(phaseIdx + 1)) {
+                return {thermo.dMolesPhase(i), 0};
+            }
+        }
     }
 
-    // Find phase in assemblage
-    for (int i = 0; i < thermo.nElements; ++i) {
-        if (thermo.iAssemblage(i) == -(phaseIdx + 1)) {
-            return {thermo.dMolesPhase(i), 0};
+    // If not found as solution phase, try as pure condensed phase
+    int speciesIdx = thermo.getSpeciesIndex(phaseName);
+    if (speciesIdx >= 0) {
+        for (int i = 0; i < thermo.nConPhases; ++i) {
+            if (thermo.iAssemblage(i) == speciesIdx + 1) {
+                return {thermo.dMolesPhase(i), 0};
+            }
         }
     }
 

@@ -1,3 +1,257 @@
 {
-  "test_cases": []
+  "test_cases": [
+    {
+      "name": "loopCO_001",
+      "database": "MSTDB-TC_V1.3_Fluorides_8-0.dat",
+      "temperature": 1000.0,
+      "pressure": 1.0,
+      "composition": {
+        "Li": 90.0,
+        "Be": 10.0,
+        "F": 110.09,
+        "Na": 0.0,
+        "K": 0.0,
+        "Ca": 0.0,
+        "Ni": 0.0,
+        "Rb": 0.09,
+        "Cs": 0.0,
+        "La": 0.0,
+        "Ce": 0.0,
+        "Nd": 0.0,
+        "Th": 0.0,
+        "U": 0.0,
+        "Pu": 0.0
+      }
+    },
+    {
+      "name": "loopCO_002",
+      "database": "MSTDB-TC_V1.3_Fluorides_8-0.dat",
+      "temperature": 1060.0,
+      "pressure": 1.0,
+      "composition": {
+        "Li": 90.0,
+        "Be": 10.0,
+        "F": 110.09,
+        "Na": 0.0,
+        "K": 0.0,
+        "Ca": 0.0,
+        "Ni": 0.0,
+        "Rb": 0.09,
+        "Cs": 0.0,
+        "La": 0.0,
+        "Ce": 0.0,
+        "Nd": 0.0,
+        "Th": 0.0,
+        "U": 0.0,
+        "Pu": 0.0
+      }
+    },
+    {
+      "name": "loopCO_003",
+      "database": "MSTDB-TC_V1.3_Fluorides_8-0.dat",
+      "temperature": 1120.0,
+      "pressure": 1.0,
+      "composition": {
+        "Li": 90.0,
+        "Be": 10.0,
+        "F": 110.09,
+        "Na": 0.0,
+        "K": 0.0,
+        "Ca": 0.0,
+        "Ni": 0.0,
+        "Rb": 0.09,
+        "Cs": 0.0,
+        "La": 0.0,
+        "Ce": 0.0,
+        "Nd": 0.0,
+        "Th": 0.0,
+        "U": 0.0,
+        "Pu": 0.0
+      }
+    },
+    {
+      "name": "loopCO_004",
+      "database": "MSTDB-TC_V1.3_Fluorides_8-0.dat",
+      "temperature": 1180.0,
+      "pressure": 1.0,
+      "composition": {
+        "Li": 90.0,
+        "Be": 10.0,
+        "F": 110.09,
+        "Na": 0.0,
+        "K": 0.0,
+        "Ca": 0.0,
+        "Ni": 0.0,
+        "Rb": 0.09,
+        "Cs": 0.0,
+        "La": 0.0,
+        "Ce": 0.0,
+        "Nd": 0.0,
+        "Th": 0.0,
+        "U": 0.0,
+        "Pu": 0.0
+      }
+    },
+    {
+      "name": "loopCO_005",
+      "database": "MSTDB-TC_V1.3_Fluorides_8-0.dat",
+      "temperature": 1240.0,
+      "pressure": 1.0,
+      "composition": {
+        "Li": 90.0,
+        "Be": 10.0,
+        "F": 110.09,
+        "Na": 0.0,
+        "K": 0.0,
+        "Ca": 0.0,
+        "Ni": 0.0,
+        "Rb": 0.09,
+        "Cs": 0.0,
+        "La": 0.0,
+        "Ce": 0.0,
+        "Nd": 0.0,
+        "Th": 0.0,
+        "U": 0.0,
+        "Pu": 0.0
+      }
+    },
+    {
+      "name": "loopCO_006",
+      "database": "MSTDB-TC_V1.3_Fluorides_8-0.dat",
+      "temperature": 1300.0,
+      "pressure": 1.0,
+      "composition": {
+        "Li": 90.0,
+        "Be": 10.0,
+        "F": 110.09,
+        "Na": 0.0,
+        "K": 0.0,
+        "Ca": 0.0,
+        "Ni": 0.0,
+        "Rb": 0.09,
+        "Cs": 0.0,
+        "La": 0.0,
+        "Ce": 0.0,
+        "Nd": 0.0,
+        "Th": 0.0,
+        "U": 0.0,
+        "Pu": 0.0
+      }
+    },
+    {
+      "name": "loopCO_007",
+      "database": "MSTDB-TC_V1.3_Fluorides_8-0.dat",
+      "temperature": 1360.0,
+      "pressure": 1.0,
+      "composition": {
+        "Li": 90.0,
+        "Be": 10.0,
+        "F": 110.09,
+        "Na": 0.0,
+        "K": 0.0,
+        "Ca": 0.0,
+        "Ni": 0.0,
+        "Rb": 0.09,
+        "Cs": 0.0,
+        "La": 0.0,
+        "Ce": 0.0,
+        "Nd": 0.0,
+        "Th": 0.0,
+        "U": 0.0,
+        "Pu": 0.0
+      }
+    },
+    {
+      "name": "loopCO_008",
+      "database": "MSTDB-TC_V1.3_Fluorides_8-0.dat",
+      "temperature": 1420.0,
+      "pressure": 1.0,
+      "composition": {
+        "Li": 90.0,
+        "Be": 10.0,
+        "F": 110.09,
+        "Na": 0.0,
+        "K": 0.0,
+        "Ca": 0.0,
+        "Ni": 0.0,
+        "Rb": 0.09,
+        "Cs": 0.0,
+        "La": 0.0,
+        "Ce": 0.0,
+        "Nd": 0.0,
+        "Th": 0.0,
+        "U": 0.0,
+        "Pu": 0.0
+      }
+    },
+    {
+      "name": "loopCO_009",
+      "database": "MSTDB-TC_V1.3_Fluorides_8-0.dat",
+      "temperature": 1480.0,
+      "pressure": 1.0,
+      "composition": {
+        "Li": 90.0,
+        "Be": 10.0,
+        "F": 110.09,
+        "Na": 0.0,
+        "K": 0.0,
+        "Ca": 0.0,
+        "Ni": 0.0,
+        "Rb": 0.09,
+        "Cs": 0.0,
+        "La": 0.0,
+        "Ce": 0.0,
+        "Nd": 0.0,
+        "Th": 0.0,
+        "U": 0.0,
+        "Pu": 0.0
+      }
+    },
+    {
+      "name": "loopCO_010",
+      "database": "MSTDB-TC_V1.3_Fluorides_8-0.dat",
+      "temperature": 1540.0,
+      "pressure": 1.0,
+      "composition": {
+        "Li": 90.0,
+        "Be": 10.0,
+        "F": 110.09,
+        "Na": 0.0,
+        "K": 0.0,
+        "Ca": 0.0,
+        "Ni": 0.0,
+        "Rb": 0.09,
+        "Cs": 0.0,
+        "La": 0.0,
+        "Ce": 0.0,
+        "Nd": 0.0,
+        "Th": 0.0,
+        "U": 0.0,
+        "Pu": 0.0
+      }
+    },
+    {
+      "name": "loopCO_011",
+      "database": "MSTDB-TC_V1.3_Fluorides_8-0.dat",
+      "temperature": 1600.0,
+      "pressure": 1.0,
+      "composition": {
+        "Li": 90.0,
+        "Be": 10.0,
+        "F": 110.09,
+        "Na": 0.0,
+        "K": 0.0,
+        "Ca": 0.0,
+        "Ni": 0.0,
+        "Rb": 0.09,
+        "Cs": 0.0,
+        "La": 0.0,
+        "Ce": 0.0,
+        "Nd": 0.0,
+        "Th": 0.0,
+        "U": 0.0,
+        "Pu": 0.0
+      }
+    }
+  ]
 }
