@@ -777,26 +777,52 @@ double ThermoClass::getEnthalpy() const {
     return io_->dEnthalpy;
 }
 
-std::tuple<double, double, int> ThermoClass::getOutputSolnSpecies(const std::string& /*phaseName*/,
+std::tuple<double, double, int> ThermoClass::getOutputSolnSpecies(const std::string& phaseName,
                                                                     const std::string& speciesName) const {
-    int speciesIdx = state_->getSpeciesIndex(speciesName);
-    if (speciesIdx < 0) {
-        return {0.0, 0.0, -1};
+    // Get phase index and species range for that phase
+    int phaseIdx = state_->getPhaseIndex(phaseName);
+    if (phaseIdx < 0) {
+        return {0.0, 0.0, -1};  // Phase not found
     }
 
-    return {state_->dMolFraction(speciesIdx),
-            state_->dChemicalPotential(speciesIdx), 0};
+    // Get species index range for this phase
+    int iFirst = (phaseIdx > 0) ? state_->nSpeciesPhase(phaseIdx) : 0;
+    int iLast = state_->nSpeciesPhase(phaseIdx + 1);
+
+    // Search for species within this phase's species range
+    for (int i = iFirst; i < iLast; ++i) {
+        if (state_->cSpeciesName[i] == speciesName) {
+            return {state_->dMolFraction(i),
+                    state_->dChemicalPotential(i), 0};
+        }
+    }
+
+    // Species not found in this phase
+    return {0.0, 0.0, -1};
 }
 
-std::tuple<double, double, int> ThermoClass::getOutputMolSpecies(const std::string& /*phaseName*/,
+std::tuple<double, double, int> ThermoClass::getOutputMolSpecies(const std::string& phaseName,
                                                                    const std::string& speciesName) const {
-    int speciesIdx = state_->getSpeciesIndex(speciesName);
-    if (speciesIdx < 0) {
-        return {0.0, 0.0, -1};
+    // Get phase index and species range for that phase
+    int phaseIdx = state_->getPhaseIndex(phaseName);
+    if (phaseIdx < 0) {
+        return {0.0, 0.0, -1};  // Phase not found
     }
 
-    return {state_->dMolesSpecies(speciesIdx),
-            state_->dMolFraction(speciesIdx), 0};
+    // Get species index range for this phase
+    int iFirst = (phaseIdx > 0) ? state_->nSpeciesPhase(phaseIdx) : 0;
+    int iLast = state_->nSpeciesPhase(phaseIdx + 1);
+
+    // Search for species within this phase's species range
+    for (int i = iFirst; i < iLast; ++i) {
+        if (state_->cSpeciesName[i] == speciesName) {
+            return {state_->dMolesSpecies(i),
+                    state_->dMolFraction(i), 0};
+        }
+    }
+
+    // Species not found in this phase
+    return {0.0, 0.0, -1};
 }
 
 std::pair<double, int> ThermoClass::getSolnPhaseMol(const std::string& phaseName) const {
