@@ -112,16 +112,19 @@ void ThermoClass::setParser(std::unique_ptr<IParser> parser) {
 // =========================================================================
 
 void ThermoClass::setTemperature(double temperature) {
-    io_->dTemperature = temperature;
+    // Convert to internal units (K) immediately to prevent drift on repeated calculate() calls
+    io_->dTemperature = io_->convertTemperatureToKelvin(temperature);
 }
 
 void ThermoClass::setPressure(double pressure) {
-    io_->dPressure = pressure;
+    // Convert to internal units (atm) immediately to prevent drift on repeated calculate() calls
+    io_->dPressure = io_->convertPressureToAtm(pressure);
 }
 
 void ThermoClass::setTemperaturePressure(double temperature, double pressure) {
-    io_->dTemperature = temperature;
-    io_->dPressure = pressure;
+    // Convert to internal units (K, atm) immediately to prevent drift on repeated calculate() calls
+    io_->dTemperature = io_->convertTemperatureToKelvin(temperature);
+    io_->dPressure = io_->convertPressureToAtm(pressure);
 }
 
 void ThermoClass::setElementMass(int atomicNumber, double mass) {
@@ -444,9 +447,8 @@ void ThermoClass::initialize() {
     // Initialize tolerances
     state_->tolerances.initDefaults();
 
-    // Convert input units to internal units (K, atm, moles)
-    io_->dTemperature = io_->convertTemperatureToKelvin(io_->dTemperature);
-    io_->dPressure = io_->convertPressureToAtm(io_->dPressure);
+    // Unit conversion now happens in setters (setTemperature, setPressure, setTemperaturePressure)
+    // to prevent drift on repeated calculate() calls
 }
 
 void ThermoClass::checkSystem() {
