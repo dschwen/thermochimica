@@ -436,6 +436,12 @@ bool PhaseAssemblageManager::removePureConPhase(int speciesIndex) {
 void PhaseAssemblageManager::saveCurrentAssemblage() {
     // Save phase moles for potential revert
     gemState_.dMolesPhaseLast = state_.dMolesPhase;
+
+    // Update iteration history with current assemblage
+    // This is critical for revert() to restore the correct assemblage
+    for (int i = 0; i < state_.nElements; ++i) {
+        gemState_.iterHistory(i, gemState_.iterGlobal) = state_.iAssemblage(i);
+    }
 }
 
 void PhaseAssemblageManager::revert() {
