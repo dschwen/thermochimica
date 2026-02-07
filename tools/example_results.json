@@ -1,0 +1,72 @@
+{
+  "results": [
+    {
+      "name": "CO_1000K_Ideal",
+      "success": true,
+      "error_code": 0,
+      "gibbs_energy": -628995.2010845807,
+      "chemical_potentials": {
+        "C": 9.299892437336354,
+        "O": -17.05685883165637
+      },
+      "comparison": {
+        "gibbs_error": 196995.2010845807
+      }
+    },
+    {
+      "name": "MoRu_2250K_RKMP",
+      "success": true,
+      "error_code": 0,
+      "gibbs_energy": -196021.922933085,
+      "chemical_potentials": {
+        "Mo": 1.393488951877828e-15,
+        "Ru": -20.95646465559874
+      },
+      "comparison": {
+        "gibbs_error": 40021.92293308504
+      }
+    },
+    {
+      "name": "FeTiVO_1500K_SUBL",
+      "success": true,
+      "error_code": 0,
+      "gibbs_energy": -7325239.613585598,
+      "chemical_potentials": {
+        "Fe": -31.89599185026856,
+        "O": -8.979103368406401,
+        "Ti": -70.4539375262359,
+        "V": -55.50259212015054
+      }
+    },
+    {
+      "name": "CsI_1000K_SUBG",
+      "success": true,
+      "error_code": 0,
+      "gibbs_energy": -2005424.283877232,
+      "chemical_potentials": {
+        "Cs": -52.22353934195921,
+        "I": -9.391840558268353
+      }
+    },
+    {
+      "name": "ZrO_1000K_SUBQ",
+      "success": true,
+      "error_code": 0,
+      "gibbs_energy": -1185764.750385412,
+      "chemical_potentials": {
+        "O": -67.48235944519209,
+        "Zr": -7.650048503814094
+      }
+    },
+    {
+      "name": "CO_2000K_HighTemp",
+      "success": true,
+      "error_code": 0,
+      "gibbs_energy": -848670.7333628127,
+      "chemical_potentials": {
+        "C": -3.668942388813309,
+        "O": -21.05162823911367
+      }
+    }
+  ]
+}

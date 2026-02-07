@@ -1,0 +1,43 @@
+{
+  "results": [
+    {
+      "name": "trial-runList_001",
+      "success": true,
+      "error_code": 0,
+      "gibbs_energy": -450244.0030904245,
+      "chemical_potentials": {
+        "C": 12.13106332687257,
+        "O": -16.39574807445676
+      },
+      "phases": {
+        "gas_ideal": 0.7471531509943412
+      }
+    },
+    {
+      "name": "trial-runList_002",
+      "success": true,
+      "error_code": 0,
+      "gibbs_energy": -615198.385853728,
+      "chemical_potentials": {
+        "C": 10.61177197503213,
+        "O": -16.68528520713154
+      },
+      "phases": {
+        "gas_ideal": 0.9986651715645982
+      }
+    },
+    {
+      "name": "trial-runList_003",
+      "success": true,
+      "error_code": 0,
+      "gibbs_energy": -785619.1005995444,
+      "chemical_potentials": {
+        "C": 9.414046930823632,
+        "O": -17.32869946288421
+      },
+      "phases": {
+        "gas_ideal": 1.248085382461645
+      }
+    }
+  ]
+}

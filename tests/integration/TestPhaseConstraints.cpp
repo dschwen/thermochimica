@@ -3,7 +3,7 @@
 /// @details Tests constrained GEM solver with phase fraction targets
 
 #include <gtest/gtest.h>
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <thermochimica/context/PhaseConstraints.hpp>
 #include <cmath>
 
@@ -24,69 +24,69 @@ inline bool relativeError(double actual, double expected, double tolerance = 1e-
 // Test setting and clearing constraints
 // Note: NobleMetals-Kaye.dat has phases: gas_ideal, FCCN, BCCN, HCPN, LiqN, sigma
 TEST(PhaseConstraintAPI, SetAndClearConstraints) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    ASSERT_TRUE(ctx.isDatabaseLoaded());
+    ASSERT_TRUE(thermo.getContext().isDatabaseLoaded());
 
     // Initially no constraints
-    EXPECT_FALSE(ctx.phaseConstraints->hasActiveConstraints());
+    EXPECT_FALSE(thermo.getContext().phaseConstraints->hasActiveConstraints());
 
     // Set a solution phase constraint (use actual phase names from database)
-    setSolnPhaseConstraint(ctx, "FCCN", 0.5);
-    EXPECT_TRUE(ctx.phaseConstraints->hasActiveConstraints());
-    EXPECT_EQ(ctx.phaseConstraints->getNumActiveConstraints(), 1);
+    thermo.setSolnPhaseConstraint("FCCN", 0.5);
+    EXPECT_TRUE(thermo.getContext().phaseConstraints->hasActiveConstraints());
+    EXPECT_EQ(thermo.getContext().phaseConstraints->getNumActiveConstraints(), 1);
 
     // Set another constraint
-    setSolnPhaseConstraint(ctx, "BCCN", 0.3);
-    EXPECT_EQ(ctx.phaseConstraints->getNumActiveConstraints(), 2);
+    thermo.setSolnPhaseConstraint("BCCN", 0.3);
+    EXPECT_EQ(thermo.getContext().phaseConstraints->getNumActiveConstraints(), 2);
 
     // Remove one constraint
-    removePhaseConstraint(ctx, "FCCN");
-    EXPECT_EQ(ctx.phaseConstraints->getNumActiveConstraints(), 1);
+    thermo.removePhaseConstraint("FCCN");
+    EXPECT_EQ(thermo.getContext().phaseConstraints->getNumActiveConstraints(), 1);
 
     // Clear all constraints
-    clearPhaseConstraints(ctx);
-    EXPECT_FALSE(ctx.phaseConstraints->hasActiveConstraints());
-    EXPECT_EQ(ctx.phaseConstraints->getNumActiveConstraints(), 0);
+    thermo.clearPhaseConstraints();
+    EXPECT_FALSE(thermo.getContext().phaseConstraints->hasActiveConstraints());
+    EXPECT_EQ(thermo.getContext().phaseConstraints->getNumActiveConstraints(), 0);
 }
 
 // Test constraint parameter setting
 TEST(PhaseConstraintAPI, SetConstraintParameters) {
-    ThermoContext ctx;
+    ThermoClass thermo;
 
     // Test default values
-    EXPECT_DOUBLE_EQ(ctx.phaseConstraints->constraintTolerance, 1e-4);
-    EXPECT_DOUBLE_EQ(ctx.phaseConstraints->penaltyParameter, 1.0);
-    EXPECT_EQ(ctx.phaseConstraints->maxOuterIterations, 20);
+    EXPECT_DOUBLE_EQ(thermo.getContext().phaseConstraints->constraintTolerance, 1e-4);
+    EXPECT_DOUBLE_EQ(thermo.getContext().phaseConstraints->penaltyParameter, 1.0);
+    EXPECT_EQ(thermo.getContext().phaseConstraints->maxOuterIterations, 20);
 
     // Set custom parameters
-    setConstraintTolerance(ctx, 1e-5);
-    EXPECT_DOUBLE_EQ(ctx.phaseConstraints->constraintTolerance, 1e-5);
+    thermo.setConstraintTolerance(1e-5);
+    EXPECT_DOUBLE_EQ(thermo.getContext().phaseConstraints->constraintTolerance, 1e-5);
 
-    setConstraintPenaltyParameter(ctx, 10.0);
-    EXPECT_DOUBLE_EQ(ctx.phaseConstraints->penaltyParameter, 10.0);
+    thermo.setConstraintPenaltyParameter(10.0);
+    EXPECT_DOUBLE_EQ(thermo.getContext().phaseConstraints->penaltyParameter, 10.0);
 
-    setConstraintMaxOuterIterations(ctx, 50);
-    EXPECT_EQ(ctx.phaseConstraints->maxOuterIterations, 50);
+    thermo.setConstraintMaxOuterIterations(50);
+    EXPECT_EQ(thermo.getContext().phaseConstraints->maxOuterIterations, 50);
 }
 
 // Test invalid constraint values are clamped
 TEST(PhaseConstraintAPI, ConstraintValueClamping) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
     // Phase constraint values should be clamped to [0, 1]
     // FCCN is at index 1 in this database
-    setSolnPhaseConstraint(ctx, "FCCN", 1.5);  // Above 1
-    auto& constraint = ctx.phaseConstraints->solnPhaseConstraints[1];
+    thermo.setSolnPhaseConstraint("FCCN", 1.5);  // Above 1
+    auto& constraint = thermo.getContext().phaseConstraints->solnPhaseConstraints[1];
     EXPECT_LE(constraint.targetFraction, 1.0);
 
-    setSolnPhaseConstraint(ctx, "FCCN", -0.5);  // Below 0
+    thermo.setSolnPhaseConstraint("FCCN", -0.5);  // Below 0
     EXPECT_GE(constraint.targetFraction, 0.0);
 }
 
@@ -96,23 +96,23 @@ TEST(PhaseConstraintAPI, ConstraintValueClamping) {
 
 // Run unconstrained calculation to establish baseline
 TEST(PhaseConstraintCalc, UnconstrainedBaseline) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    setTemperaturePressure(ctx, 1500.0, 1.0);
-    setElementMass(ctx, 42, 0.5);  // Mo
-    setElementMass(ctx, 44, 0.5);  // Ru
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(44, 0.5);  // Ru
 
     // Run unconstrained calculation
-    thermochimica(ctx);
+    thermo.calculate();
 
-    EXPECT_EQ(ctx.infoThermo(), 0) << "Unconstrained calculation should succeed";
+    EXPECT_EQ(thermo.getInfoCode(), 0) << "Unconstrained calculation should succeed";
 
     // Get phase fractions (use actual phase names from database)
-    auto [fcc_frac, fcc_info] = getPhaseElementFraction(ctx, "FCCN");
-    auto [bcc_frac, bcc_info] = getPhaseElementFraction(ctx, "BCCN");
+    auto [fcc_frac, fcc_info] = thermo.getPhaseElementFraction("FCCN");
+    auto [bcc_frac, bcc_info] = thermo.getPhaseElementFraction("BCCN");
 
     // Natural phase fractions should be in valid range
     EXPECT_GE(fcc_frac, 0.0);
@@ -121,7 +121,7 @@ TEST(PhaseConstraintCalc, UnconstrainedBaseline) {
     EXPECT_LE(bcc_frac, 1.0);
 
     // Store baseline Gibbs energy
-    double gibbsBaseline = getGibbsEnergy(ctx);
+    double gibbsBaseline = thermo.getGibbsEnergy();
     EXPECT_LT(gibbsBaseline, 0.0) << "Gibbs energy should be negative";
 }
 
@@ -134,39 +134,39 @@ TEST(PhaseConstraintCalc, UnconstrainedBaseline) {
 // the assemblage and unconstrained phases are excluded. This means we need to
 // constrain multiple phases that sum to ~1.0 for a meaningful test.
 TEST(PhaseConstraintCalc, SinglePhaseConstraint) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    setTemperaturePressure(ctx, 1800.0, 1.0);
-    setElementMass(ctx, 42, 0.5);  // Mo
-    setElementMass(ctx, 44, 0.5);  // Ru
+    thermo.setTemperaturePressure(1800.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(44, 0.5);  // Ru
 
     // Constrain two phases: FCCN to 40%, BCCN to 60% (sum to 1.0)
     double fccTarget = 0.4;
     double bccTarget = 0.6;
-    setSolnPhaseConstraint(ctx, "FCCN", fccTarget);
-    setSolnPhaseConstraint(ctx, "BCCN", bccTarget);
+    thermo.setSolnPhaseConstraint("FCCN", fccTarget);
+    thermo.setSolnPhaseConstraint("BCCN", bccTarget);
 
     // Verify constraints were set
-    EXPECT_TRUE(ctx.phaseConstraints->hasActiveConstraints());
-    EXPECT_EQ(ctx.phaseConstraints->getNumActiveConstraints(), 2);
+    EXPECT_TRUE(thermo.getContext().phaseConstraints->hasActiveConstraints());
+    EXPECT_EQ(thermo.getContext().phaseConstraints->getNumActiveConstraints(), 2);
 
     // Set solver parameters
     double tolerance = 1e-2;  // Slightly relaxed tolerance for two-phase system
-    setConstraintTolerance(ctx, tolerance);
-    setConstraintMaxOuterIterations(ctx, 50);
+    thermo.setConstraintTolerance(tolerance);
+    thermo.setConstraintMaxOuterIterations(50);
 
     // Run constrained calculation
-    thermochimica(ctx);
+    thermo.calculate();
 
     // Check that calculation converged
-    EXPECT_EQ(ctx.infoThermo(), 0) << "Constrained calculation should succeed";
+    EXPECT_EQ(thermo.getInfoCode(), 0) << "Constrained calculation should succeed";
 
     // Check that constraint tracking works
-    auto [fcc_frac, fcc_info] = getPhaseElementFraction(ctx, "FCCN");
-    auto [bcc_frac, bcc_info] = getPhaseElementFraction(ctx, "BCCN");
+    auto [fcc_frac, fcc_info] = thermo.getPhaseElementFraction("FCCN");
+    auto [bcc_frac, bcc_info] = thermo.getPhaseElementFraction("BCCN");
     EXPECT_EQ(fcc_info, 0) << "Should be able to get FCC fraction";
     EXPECT_EQ(bcc_info, 0) << "Should be able to get BCC fraction";
 
@@ -186,41 +186,41 @@ TEST(PhaseConstraintCalc, SinglePhaseConstraint) {
 // Test that constrained solution has higher Gibbs energy than unconstrained
 TEST(PhaseConstraintCalc, ConstrainedGibbsHigher) {
     // First, run unconstrained calculation
-    ThermoContext ctx1;
-    setStandardUnits(ctx1);
-    setThermoFilename(ctx1, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx1);
+    ThermoClass thermo1;
+    thermo1.setStandardUnits();
+    thermo1.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo1.parseCSDataFile();
 
-    setTemperaturePressure(ctx1, 1800.0, 1.0);
-    setElementMass(ctx1, 42, 0.5);  // Mo
-    setElementMass(ctx1, 44, 0.5);  // Ru
+    thermo1.setTemperaturePressure(1800.0, 1.0);
+    thermo1.setElementMass(42, 0.5);  // Mo
+    thermo1.setElementMass(44, 0.5);  // Ru
 
-    thermochimica(ctx1);
-    ASSERT_EQ(ctx1.infoThermo(), 0);
-    double gibbsUnconstrained = getGibbsEnergy(ctx1);
+    thermo1.calculate();
+    ASSERT_EQ(thermo1.getInfoCode(), 0);
+    double gibbsUnconstrained = thermo1.getGibbsEnergy();
 
     // Get natural FCCN fraction
-    auto [natural_fcc, info] = getPhaseElementFraction(ctx1, "FCCN");
+    auto [natural_fcc, info] = thermo1.getPhaseElementFraction("FCCN");
 
     // Run constrained calculation with different target
-    ThermoContext ctx2;
-    setStandardUnits(ctx2);
-    setThermoFilename(ctx2, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx2);
+    ThermoClass thermo2;
+    thermo2.setStandardUnits();
+    thermo2.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo2.parseCSDataFile();
 
-    setTemperaturePressure(ctx2, 1800.0, 1.0);
-    setElementMass(ctx2, 42, 0.5);
-    setElementMass(ctx2, 44, 0.5);
+    thermo2.setTemperaturePressure(1800.0, 1.0);
+    thermo2.setElementMass(42, 0.5);
+    thermo2.setElementMass(44, 0.5);
 
     // Constrain to a different fraction than natural
     double targetFraction = std::min(0.9, std::max(0.1, natural_fcc + 0.2));
-    setSolnPhaseConstraint(ctx2, "FCCN", targetFraction);
-    setConstraintTolerance(ctx2, 1e-3);
+    thermo2.setSolnPhaseConstraint("FCCN", targetFraction);
+    thermo2.setConstraintTolerance(1e-3);
 
-    thermochimica(ctx2);
+    thermo2.calculate();
 
-    if (ctx2.infoThermo() == 0) {
-        double gibbsConstrained = getGibbsEnergy(ctx2);
+    if (thermo2.getInfoCode() == 0) {
+        double gibbsConstrained = thermo2.getGibbsEnergy();
 
         // Constrained optimum should have higher (less negative) Gibbs energy
         // since we're forcing a non-equilibrium state
@@ -233,28 +233,28 @@ TEST(PhaseConstraintCalc, ConstrainedGibbsHigher) {
 // Note: With phase-field design, constraining to 0 means not adding the phase.
 // Instead, test constraining one phase to a small fraction with another taking the rest.
 TEST(PhaseConstraintCalc, SmallFractionConstraint) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    setTemperaturePressure(ctx, 1500.0, 1.0);
-    setElementMass(ctx, 42, 0.5);  // Mo
-    setElementMass(ctx, 44, 0.5);  // Ru
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(44, 0.5);  // Ru
 
     // Constrain BCCN to small fraction, FCCN takes the rest
     double bccTarget = 0.1;
     double fccTarget = 0.9;
-    setSolnPhaseConstraint(ctx, "BCCN", bccTarget);
-    setSolnPhaseConstraint(ctx, "FCCN", fccTarget);
-    setConstraintTolerance(ctx, 1e-2);
-    setConstraintMaxOuterIterations(ctx, 50);
+    thermo.setSolnPhaseConstraint("BCCN", bccTarget);
+    thermo.setSolnPhaseConstraint("FCCN", fccTarget);
+    thermo.setConstraintTolerance(1e-2);
+    thermo.setConstraintMaxOuterIterations(50);
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    if (ctx.infoThermo() == 0) {
-        auto [bcc_frac, bcc_info] = getPhaseElementFraction(ctx, "BCCN");
-        auto [fcc_frac, fcc_info] = getPhaseElementFraction(ctx, "FCCN");
+    if (thermo.getInfoCode() == 0) {
+        auto [bcc_frac, bcc_info] = thermo.getPhaseElementFraction("BCCN");
+        auto [fcc_frac, fcc_info] = thermo.getPhaseElementFraction("FCCN");
         EXPECT_NEAR(bcc_frac, bccTarget, 0.02) << "BCC should be near target";
         EXPECT_NEAR(fcc_frac, fccTarget, 0.02) << "FCC should be near target";
     }
@@ -264,30 +264,30 @@ TEST(PhaseConstraintCalc, SmallFractionConstraint) {
 // This simulates a phase field scenario where a phase is completely absent.
 // The solver should handle this gracefully even though the target is zero.
 TEST(PhaseConstraintCalc, ZeroFractionConstraint) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    setTemperaturePressure(ctx, 1500.0, 1.0);
-    setElementMass(ctx, 42, 0.5);  // Mo
-    setElementMass(ctx, 44, 0.5);  // Ru
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(44, 0.5);  // Ru
 
     // Constrain FCCN to exactly zero, BCCN takes all
     // This simulates a phase field scenario where one phase is absent
     double fccTarget = 0.0;
     double bccTarget = 1.0;
-    setSolnPhaseConstraint(ctx, "FCCN", fccTarget);
-    setSolnPhaseConstraint(ctx, "BCCN", bccTarget);
-    setConstraintTolerance(ctx, 1e-2);
-    setConstraintMaxOuterIterations(ctx, 50);
+    thermo.setSolnPhaseConstraint("FCCN", fccTarget);
+    thermo.setSolnPhaseConstraint("BCCN", bccTarget);
+    thermo.setConstraintTolerance(1e-2);
+    thermo.setConstraintMaxOuterIterations(50);
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    EXPECT_EQ(ctx.infoThermo(), 0) << "Zero-fraction constraint should succeed";
+    EXPECT_EQ(thermo.getInfoCode(), 0) << "Zero-fraction constraint should succeed";
 
-    auto [fcc_frac, fcc_info] = getPhaseElementFraction(ctx, "FCCN");
-    auto [bcc_frac, bcc_info] = getPhaseElementFraction(ctx, "BCCN");
+    auto [fcc_frac, fcc_info] = thermo.getPhaseElementFraction("FCCN");
+    auto [bcc_frac, bcc_info] = thermo.getPhaseElementFraction("BCCN");
 
     EXPECT_EQ(fcc_info, 0) << "Should retrieve FCC fraction";
     EXPECT_EQ(bcc_info, 0) << "Should retrieve BCC fraction";
@@ -303,40 +303,40 @@ TEST(PhaseConstraintCalc, ZeroFractionConstraint) {
 // phase fraction constraints provide additional degrees of freedom beyond
 // what the Gibbs phase rule allows for unconstrained equilibrium.
 TEST(PhaseConstraintCalc, MorePhasesThanElements) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    setTemperaturePressure(ctx, 1500.0, 1.0);
+    thermo.setTemperaturePressure(1500.0, 1.0);
     // Binary system: Mo and Ru (2 active elements)
-    setElementMass(ctx, 42, 0.5);  // Mo
-    setElementMass(ctx, 44, 0.5);  // Ru
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(44, 0.5);  // Ru
 
     // Constrain 3 phases in a 2-element system
     // This exceeds Gibbs phase rule (P <= C) but is valid for constrained equilibrium
     double fccTarget = 0.4;
     double bccTarget = 0.4;
     double hcpTarget = 0.2;
-    setSolnPhaseConstraint(ctx, "FCCN", fccTarget);
-    setSolnPhaseConstraint(ctx, "BCCN", bccTarget);
-    setSolnPhaseConstraint(ctx, "HCPN", hcpTarget);
-    setConstraintTolerance(ctx, 1e-2);
-    setConstraintMaxOuterIterations(ctx, 50);
+    thermo.setSolnPhaseConstraint("FCCN", fccTarget);
+    thermo.setSolnPhaseConstraint("BCCN", bccTarget);
+    thermo.setSolnPhaseConstraint("HCPN", hcpTarget);
+    thermo.setConstraintTolerance(1e-2);
+    thermo.setConstraintMaxOuterIterations(50);
 
     // Verify we have 3 constraints in a 2-element system
-    EXPECT_EQ(ctx.phaseConstraints->getNumActiveConstraints(), 3);
+    EXPECT_EQ(thermo.getContext().phaseConstraints->getNumActiveConstraints(), 3);
 
-    thermochimica(ctx);
+    thermo.calculate();
 
     // Should succeed despite having more phases than elements
-    EXPECT_EQ(ctx.infoThermo(), 0)
+    EXPECT_EQ(thermo.getInfoCode(), 0)
         << "Constrained equilibrium with more phases than elements should succeed";
 
-    if (ctx.infoThermo() == 0) {
-        auto [fcc_frac, fcc_info] = getPhaseElementFraction(ctx, "FCCN");
-        auto [bcc_frac, bcc_info] = getPhaseElementFraction(ctx, "BCCN");
-        auto [hcp_frac, hcp_info] = getPhaseElementFraction(ctx, "HCPN");
+    if (thermo.getInfoCode() == 0) {
+        auto [fcc_frac, fcc_info] = thermo.getPhaseElementFraction("FCCN");
+        auto [bcc_frac, bcc_info] = thermo.getPhaseElementFraction("BCCN");
+        auto [hcp_frac, hcp_info] = thermo.getPhaseElementFraction("HCPN");
 
         EXPECT_EQ(fcc_info, 0) << "Should retrieve FCC fraction";
         EXPECT_EQ(bcc_info, 0) << "Should retrieve BCC fraction";
@@ -359,38 +359,38 @@ TEST(PhaseConstraintCalc, MorePhasesThanElements) {
 
 // Test that constraints are properly reset between calculations
 TEST(PhaseConstraintCalc, ConstraintReset) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
     // First constrained calculation
-    setTemperaturePressure(ctx, 1500.0, 1.0);
-    setElementMass(ctx, 42, 0.5);
-    setElementMass(ctx, 44, 0.5);
-    setSolnPhaseConstraint(ctx, "FCCN", 0.5);
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(42, 0.5);
+    thermo.setElementMass(44, 0.5);
+    thermo.setSolnPhaseConstraint("FCCN", 0.5);
 
-    thermochimica(ctx);
-    EXPECT_TRUE(ctx.phaseConstraints->hasActiveConstraints())
+    thermo.calculate();
+    EXPECT_TRUE(thermo.getContext().phaseConstraints->hasActiveConstraints())
         << "Constraints should be active after calculation";
 
     // Reset for new calculation
-    resetThermo(ctx);
+    thermo.reset();
 
     // Constraints should still be defined (reset keeps constraint definitions)
-    EXPECT_TRUE(ctx.phaseConstraints->hasActiveConstraints())
-        << "resetThermo should preserve constraint definitions";
+    EXPECT_TRUE(thermo.getContext().phaseConstraints->hasActiveConstraints())
+        << "reset should preserve constraint definitions";
 
     // But Lagrange multipliers should be reset
-    for (const auto& c : ctx.phaseConstraints->solnPhaseConstraints) {
+    for (const auto& c : thermo.getContext().phaseConstraints->solnPhaseConstraints) {
         EXPECT_DOUBLE_EQ(c.lagrangeMultiplier, 0.0)
             << "Lagrange multipliers should be reset";
     }
 
     // Full reset should clear constraints
-    resetThermoAll(ctx);
-    EXPECT_FALSE(ctx.phaseConstraints->hasActiveConstraints())
-        << "resetThermoAll should clear constraints";
+    thermo.resetAll();
+    EXPECT_FALSE(thermo.getContext().phaseConstraints->hasActiveConstraints())
+        << "resetAll should clear constraints";
 }
 
 //=============================================================================
@@ -399,35 +399,35 @@ TEST(PhaseConstraintCalc, ConstraintReset) {
 
 // Test constraint on non-existent phase
 TEST(PhaseConstraintEdgeCases, NonExistentPhase) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
     // Try to set constraint on non-existent phase
-    setSolnPhaseConstraint(ctx, "NONEXISTENT_PHASE", 0.5);
+    thermo.setSolnPhaseConstraint("NONEXISTENT_PHASE", 0.5);
 
     // Should not have any active constraints (invalid phase ignored)
-    EXPECT_FALSE(ctx.phaseConstraints->hasActiveConstraints())
+    EXPECT_FALSE(thermo.getContext().phaseConstraints->hasActiveConstraints())
         << "Constraint on non-existent phase should be ignored";
 }
 
 // Test multiple constraints that sum to > 1
 TEST(PhaseConstraintEdgeCases, OverconstrainedSystem) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    setTemperaturePressure(ctx, 1500.0, 1.0);
-    setElementMass(ctx, 42, 0.5);
-    setElementMass(ctx, 44, 0.5);
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(42, 0.5);
+    thermo.setElementMass(44, 0.5);
 
     // Set constraints that sum to > 1 (infeasible)
-    setSolnPhaseConstraint(ctx, "FCCN", 0.6);
-    setSolnPhaseConstraint(ctx, "BCCN", 0.6);
+    thermo.setSolnPhaseConstraint("FCCN", 0.6);
+    thermo.setSolnPhaseConstraint("BCCN", 0.6);
 
-    thermochimica(ctx);
+    thermo.calculate();
 
     // Should either fail or converge to best possible approximation
     // Either outcome is acceptable for an infeasible problem
@@ -440,26 +440,26 @@ TEST(PhaseConstraintEdgeCases, OverconstrainedSystem) {
 
 // Test element chemical potential retrieval
 TEST(PhaseConstraintAPI, ElementChemicalPotentials) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    setTemperaturePressure(ctx, 1500.0, 1.0);
-    setElementMass(ctx, 42, 0.5);  // Mo
-    setElementMass(ctx, 44, 0.5);  // Ru
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(44, 0.5);  // Ru
 
     // Run unconstrained calculation
-    thermochimica(ctx);
-    ASSERT_EQ(ctx.infoThermo(), 0);
+    thermo.calculate();
+    ASSERT_EQ(thermo.getInfoCode(), 0);
 
     // Test single element retrieval
-    auto [mo_pot, mo_info] = getElementChemicalPotential(ctx, 0);
+    auto [mo_pot, mo_info] = thermo.getElementChemicalPotential(0);
     EXPECT_EQ(mo_info, 0) << "Should retrieve first element potential";
 
     // Test get all element potentials
-    auto potentials = getAllElementChemicalPotentials(ctx);
-    EXPECT_EQ(potentials.size(), static_cast<size_t>(ctx.thermo->nElements))
+    auto potentials = thermo.getAllElementChemicalPotentials();
+    EXPECT_EQ(potentials.size(), static_cast<size_t>(thermo.getContext().thermo->nElements))
         << "Should return potentials for all elements";
 
     // Potentials should be finite
@@ -469,34 +469,34 @@ TEST(PhaseConstraintAPI, ElementChemicalPotentials) {
     }
 
     // Test invalid index
-    auto [bad_pot, bad_info] = getElementChemicalPotential(ctx, -1);
+    auto [bad_pot, bad_info] = thermo.getElementChemicalPotential(-1);
     EXPECT_NE(bad_info, 0) << "Invalid index should return error";
 
-    auto [bad_pot2, bad_info2] = getElementChemicalPotential(ctx, 1000);
+    auto [bad_pot2, bad_info2] = thermo.getElementChemicalPotential(1000);
     EXPECT_NE(bad_info2, 0) << "Out of range index should return error";
 }
 
 // Test Gibbs energy derivative (dG/df) retrieval
 TEST(PhaseConstraintAPI, GibbsEnergyDerivative) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    setTemperaturePressure(ctx, 1500.0, 1.0);
-    setElementMass(ctx, 42, 0.5);  // Mo
-    setElementMass(ctx, 44, 0.5);  // Ru
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(44, 0.5);  // Ru
 
     // Constrain two phases
-    setSolnPhaseConstraint(ctx, "FCCN", 0.4);
-    setSolnPhaseConstraint(ctx, "BCCN", 0.6);
+    thermo.setSolnPhaseConstraint("FCCN", 0.4);
+    thermo.setSolnPhaseConstraint("BCCN", 0.6);
 
-    thermochimica(ctx);
-    ASSERT_EQ(ctx.infoThermo(), 0);
+    thermo.calculate();
+    ASSERT_EQ(thermo.getInfoCode(), 0);
 
     // Get derivatives for constrained phases
-    auto [dGdf_fcc, fcc_info] = getGibbsEnergyDerivative(ctx, "FCCN");
-    auto [dGdf_bcc, bcc_info] = getGibbsEnergyDerivative(ctx, "BCCN");
+    auto [dGdf_fcc, fcc_info] = thermo.getGibbsEnergyDerivative("FCCN");
+    auto [dGdf_bcc, bcc_info] = thermo.getGibbsEnergyDerivative("BCCN");
 
     EXPECT_EQ(fcc_info, 0) << "Should retrieve FCCN derivative";
     EXPECT_EQ(bcc_info, 0) << "Should retrieve BCCN derivative";
@@ -507,6 +507,6 @@ TEST(PhaseConstraintAPI, GibbsEnergyDerivative) {
     EXPECT_TRUE(std::isfinite(dGdf_bcc)) << "BCCN derivative should be finite";
 
     // Test non-existent phase
-    auto [dGdf_bad, bad_info] = getGibbsEnergyDerivative(ctx, "NONEXISTENT");
+    auto [dGdf_bad, bad_info] = thermo.getGibbsEnergyDerivative("NONEXISTENT");
     EXPECT_NE(bad_info, 0) << "Non-existent phase should return error";
 }

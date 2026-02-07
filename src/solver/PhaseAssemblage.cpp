@@ -637,6 +637,7 @@ bool PhaseAssemblage::addPureConPhase(ThermoContext& ctx, int speciesIndex) {
     // Add to assemblage
     thermo.iAssemblage(thermo.nConPhases) = speciesIndex + 1;
     thermo.dMolesPhase(thermo.nConPhases) = thermo.tolerances[kTolPhaseMoles] * 10.0;
+    thermo.dMolesSpecies(speciesIndex) = thermo.tolerances[kTolPhaseMoles] * 10.0;
     thermo.nConPhases++;
 
     // Store in history

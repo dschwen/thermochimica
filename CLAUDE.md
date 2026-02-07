@@ -51,7 +51,8 @@ The library uses a **context-based architecture** where all state is stored in a
 
 | Class | Purpose |
 |-------|---------|
-| `ThermoContext` | Main context object containing all state |
+| `ThermoClass` | Main API class (modern, canonical interface) |
+| `ThermoContext` | Internal context object containing all state |
 | `ThermoState` | Thermodynamic state: phases, species, results |
 | `ThermoIO` | I/O parameters: T, P, composition, output flags |
 | `GEMState` | GEM solver state: iteration, convergence |
@@ -59,54 +60,55 @@ The library uses a **context-based architecture** where all state is stored in a
 
 ### Solver Flow
 
-1. **Input** → `setThermoFilename()`, `setTemperaturePressure()`, `setElementMass()`
-2. **Parsing** → `parseCSDataFile()` reads ChemSage `.dat` databases
-3. **Calculation** → `thermochimica()` runs full equilibrium calculation
+1. **Input** → `loadDatabase()`, `setTemperaturePressure()`, `setElementMass()`
+2. **Parsing** → Database loaded and parsed automatically
+3. **Calculation** → `calculate()` runs full equilibrium calculation
 4. **Output** → `printResults()`, `getOutputChemPot()`, etc.
 
 ### Error Handling
 
-`ctx.infoThermo()` returns an integer code (0 = success). Use `getErrorMessage()` for descriptions.
+`thermo.isSuccess()` checks if calculation succeeded. Use `thermo.getErrorMessage()` for descriptions.
 
 ## API Usage
 
+The canonical API is the modern class-based `ThermoClass`:
+
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 
 int main() {
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
 
-    Thermochimica::setThermoFilename(ctx, "data/C-O.dat");
-    Thermochimica::parseCSDataFile(ctx);
+    ThermoClass thermo;
 
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setTemperaturePressure(ctx, 1000.0, 1.0);
-    Thermochimica::setElementMass(ctx, 6, 1.0);  // Carbon
+    thermo.loadDatabase("data/C-O.dat");
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(6, 1.0);  // Carbon
 
-    Thermochimica::thermochimica(ctx);
+    thermo.calculate();
 
-    if (ctx.infoThermo() == 0) {
-        Thermochimica::printResults(ctx);
+    if (thermo.isSuccess()) {
+        thermo.printResults();
     }
     return 0;
 }
 ```
 
-## Compatibility Layer
+## Legacy Code
 
-For migrating from the old Fortran API, use the compatibility header:
+For accessing internal state or advanced features:
 
 ```cpp
-#include <thermochimica/ThermochimicaCompat.hpp>
-using namespace Thermochimica::Compat;
+// Access underlying context if needed for advanced use
+ThermoContext& ctx = thermo.getContext();
 
-// Old-style API calls now work:
-setThermoFilename("database.dat");
-parseThermoFile();
-thermochimica();
+// Direct state access
+double T = ctx.io->dTemperature;
+auto& state = *ctx.thermo;
 ```
 
-See `docs/migration_guide.md` for detailed migration instructions.
+See `docs/MIGRATION_FROM_FREE_FUNCTIONS.md` if migrating from old code.
 
 ## Dependencies
 
@@ -125,7 +127,8 @@ See `docs/migration_guide.md` for detailed migration instructions.
 
 ### Style
 
-- All public API functions take `ThermoContext&` as first parameter
+- Public API is through `ThermoClass` member functions
 - Use Eigen for matrix/vector operations
 - Prefer `std::optional` and `std::tuple` for multi-value returns
-- Use structured bindings: `auto [value, info] = getResult(ctx, name);`
+- Use structured bindings: `auto [value, info] = thermo.getResult(name);`
+- Follow RAII principles for resource management

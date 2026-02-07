@@ -1,0 +1,14 @@
+{
+  "results": [
+    {
+      "name": "exclude-runList_001",
+      "success": true,
+      "error_code": 0,
+      "gibbs_energy": -9779.069838806578,
+      "chemical_potentials": {
+        "Mo": -3.581464034589918,
+        "Ru": 2.829372353995707
+      }
+    }
+  ]
+}

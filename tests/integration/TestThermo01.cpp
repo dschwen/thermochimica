@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 
 using namespace Thermochimica;
 
@@ -7,56 +7,56 @@ using namespace Thermochimica;
 // Tests that an error is returned when no data file is specified
 
 TEST(ThermoIntegration, Test01_NoDataFileSpecified) {
-    ThermoContext ctx;
+    ThermoClass thermo;
 
     // Set up conditions without specifying data file
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, 300.0, 1.0);
-    setElementMass(ctx, 6, 1.0);  // Carbon
-    setElementMass(ctx, 8, 1.0);  // Oxygen
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(300.0, 1.0);
+    thermo.setElementMass(6, 1.0);  // Carbon
+    thermo.setElementMass(8, 1.0);  // Oxygen
 
     // Don't parse a data file - this should cause an error
-    thermochimica(ctx);
+    int result = thermo.calculate();
 
     // Expect error code for no data file / no species
-    EXPECT_NE(ctx.infoThermo(), 0);
+    EXPECT_NE(result, 0);
 }
 
 // Additional integration tests would be added here
 // following the same pattern as the Fortran tests
 
 TEST(ThermoIntegration, Test_InvalidTemperature) {
-    ThermoContext ctx;
+    ThermoClass thermo;
 
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, -100.0, 1.0);  // Invalid negative temperature
-    setElementMass(ctx, 6, 1.0);
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(-100.0, 1.0);  // Invalid negative temperature
+    thermo.setElementMass(6, 1.0);
 
     // Would need database loaded first
-    // thermochimica(ctx);
-    // EXPECT_EQ(ctx.infoThermo(), ErrorCode::kTemperatureOutOfRange);
+    // int result = thermo.calculate();
+    // EXPECT_EQ(result, ErrorCode::kTemperatureOutOfRange);
 }
 
 TEST(ThermoIntegration, Test_InvalidPressure) {
-    ThermoContext ctx;
+    ThermoClass thermo;
 
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, 1000.0, -1.0);  // Invalid negative pressure
-    setElementMass(ctx, 6, 1.0);
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(1000.0, -1.0);  // Invalid negative pressure
+    thermo.setElementMass(6, 1.0);
 
     // Would need database loaded first
-    // thermochimica(ctx);
-    // EXPECT_EQ(ctx.infoThermo(), ErrorCode::kPressureOutOfRange);
+    // int result = thermo.calculate();
+    // EXPECT_EQ(result, ErrorCode::kPressureOutOfRange);
 }
 
 TEST(ThermoIntegration, Test_NoComposition) {
-    ThermoContext ctx;
+    ThermoClass thermo;
 
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, 1000.0, 1.0);
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(1000.0, 1.0);
     // Don't set any element masses
 
     // Would need database loaded first
-    // thermochimica(ctx);
-    // EXPECT_EQ(ctx.infoThermo(), ErrorCode::kCompositionOutOfRange);
+    // int result = thermo.calculate();
+    // EXPECT_EQ(result, ErrorCode::kCompositionOutOfRange);
 }

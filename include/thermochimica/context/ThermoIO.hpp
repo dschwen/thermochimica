@@ -16,8 +16,12 @@ struct ThermoIO {
     int iPrintResultsMode = 0;          ///< Print results mode (0=none, 1=basic, 2=detailed)
     int nMinSpeciesPerPhase = 2;        ///< Minimum species threshold per phase
 
-    double dTemperature = 0.0;          ///< Temperature (internal: K)
-    double dPressure = 0.0;             ///< Pressure (internal: atm)
+    double dTemperature = 0.0;          ///< Temperature (internal: K, converted)
+    double dPressure = 0.0;             ///< Pressure (internal: atm, converted)
+    double dTemperatureInput = 0.0;     ///< Temperature (raw user input, in user units)
+    double dPressureInput = 0.0;        ///< Pressure (raw user input, in user units)
+    bool bTemperatureConverted = false; ///< Temperature converted for current cycle
+    bool bPressureConverted = false;    ///< Pressure converted for current cycle
     double dFuzzMag = 1.0e-12;          ///< Fuzzy stoichiometry magnitude
 
     std::array<double, Constants::kMaxIsotopes> dElementMass{};  ///< Element masses (0:168)

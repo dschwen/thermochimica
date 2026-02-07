@@ -4,11 +4,13 @@ A computational thermodynamics library written in C++17 that determines equilibr
 
 ## Features
 
-- **Context-based architecture**: Thread-safe design with explicit state management
-- **Modern C++17**: Uses Eigen for linear algebra, structured bindings, and RAII
+- **Modern object-oriented API**: Clean C++ class-based interface with RAII and encapsulation
+- **Thread-safe design**: Independent instances for parallel calculations
+- **Modern C++17**: Uses Eigen for linear algebra, structured bindings, and move semantics
 - **Multiple solution models**: IDMX, RKMP, SUBL, SUBLM, SUBG, SUBQ, QKTO, SUBI
 - **ChemSage compatibility**: Reads standard `.dat` thermodynamic database files
 - **Flexible units**: Temperature (K/C/F/R), pressure (atm/bar/Pa), mass (moles/grams)
+- **Extensible**: Strategy pattern for custom solvers and models
 - **Cross-platform**: Builds on Linux, macOS, and Windows
 
 ## Documentation
@@ -16,7 +18,9 @@ A computational thermodynamics library written in C++17 that determines equilibr
 | Document | Description |
 |----------|-------------|
 | [Getting Started](docs/getting-started.md) | Quick start guide with minimal example |
-| [API Reference](docs/api-reference.md) | Complete function reference |
+| [ThermoClass API](docs/class_based_api.md) | Modern class-based API documentation |
+| [API Reference](docs/api-reference.md) | Complete method reference |
+| [Migration Guide](docs/MIGRATION_FROM_FREE_FUNCTIONS.md) | Migrate from old free-function API |
 | [Building](docs/building.md) | Build instructions and project integration |
 | [Configuration](docs/configuration.md) | Tolerances, units, and solver options |
 | [Databases](docs/databases.md) | ChemSage format and available databases |
@@ -61,25 +65,30 @@ ctest --output-on-failure
 ## Minimal Example
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 
 int main() {
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
 
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setThermoFilename(ctx, "data/CO.dat");
-    Thermochimica::parseCSDataFile(ctx);
+    // Create Thermochimica instance
+    ThermoClass thermo;
 
-    Thermochimica::setTemperaturePressure(ctx, 1000.0, 1.0);
-    Thermochimica::setElementMass(ctx, 6, 1.0);   // C
-    Thermochimica::setElementMass(ctx, 8, 2.0);   // O
+    // Load database and set units
+    thermo.loadDatabase("data/CO.dat");
+    thermo.setStandardUnits();
 
-    Thermochimica::thermochimica(ctx);
+    // Set conditions and composition
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(6, 1.0);   // C
+    thermo.setElementMass(8, 2.0);   // O
 
-    if (ctx.isSuccess()) {
-        double G = Thermochimica::getGibbsEnergy(ctx);
+    // Run equilibrium calculation
+    thermo.calculate();
+
+    if (thermo.isSuccess()) {
+        double G = thermo.getGibbsEnergy();
         // G ≈ -629533 J for CO2 at 1000 K
-        Thermochimica::printResults(ctx);
+        thermo.printResults();
     }
 
     return 0;
@@ -88,21 +97,21 @@ int main() {
 
 ## Thread Safety
 
-Each `ThermoContext` is independent, enabling parallel calculations:
+Each `ThermoClass` instance is independent, enabling parallel calculations:
 
 ```cpp
+#include <thermochimica/ThermoClass.hpp>
 #include <thread>
 #include <vector>
 
 void calculate(double temperature) {
-    Thermochimica::ThermoContext ctx;
-    Thermochimica::setThermoFilename(ctx, "data/CO.dat");
-    Thermochimica::parseCSDataFile(ctx);
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setTemperaturePressure(ctx, temperature, 1.0);
-    Thermochimica::setElementMass(ctx, 6, 1.0);
-    Thermochimica::thermochimica(ctx);
-    // Results are local to this context
+    Thermochimica::ThermoClass thermo;
+    thermo.loadDatabase("data/CO.dat");
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(temperature, 1.0);
+    thermo.setElementMass(6, 1.0);
+    thermo.calculate();
+    // Results are local to this instance
 }
 
 int main() {

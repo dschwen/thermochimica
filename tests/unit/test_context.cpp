@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <thermochimica/ThermoContext.hpp>
 #include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
+#include <thermochimica/util/ErrorCodes.hpp>
 
 using namespace Thermochimica;
 
@@ -25,42 +27,45 @@ TEST(ContextTest, InitialState) {
 }
 
 TEST(ContextTest, SetUnits) {
-    ThermoContext ctx;
+    ThermoClass thermo;
+    thermo.setStandardUnits();
 
-    setStandardUnits(ctx);
-
+    auto& ctx = thermo.getContext();
     EXPECT_EQ(ctx.io->cInputUnitTemperature, "K");
     EXPECT_EQ(ctx.io->cInputUnitPressure, "atm");
     EXPECT_EQ(ctx.io->cInputUnitMass, "moles");
 }
 
 TEST(ContextTest, SetTemperaturePressure) {
-    ThermoContext ctx;
+    ThermoClass thermo;
+    thermo.setTemperaturePressure(1000.0, 1.0);
 
-    setTemperaturePressure(ctx, 1000.0, 1.0);
-
-    EXPECT_DOUBLE_EQ(ctx.io->dTemperature, 1000.0);
-    EXPECT_DOUBLE_EQ(ctx.io->dPressure, 1.0);
+    auto& ctx = thermo.getContext();
+    // Values are stored as raw input until initialize() converts them
+    EXPECT_DOUBLE_EQ(ctx.io->dTemperatureInput, 1000.0);
+    EXPECT_DOUBLE_EQ(ctx.io->dPressureInput, 1.0);
+    EXPECT_FALSE(ctx.io->bTemperatureConverted);
+    EXPECT_FALSE(ctx.io->bPressureConverted);
 }
 
 TEST(ContextTest, SetElementMass) {
-    ThermoContext ctx;
+    ThermoClass thermo;
+    thermo.setElementMass(6, 1.0);   // Carbon
+    thermo.setElementMass(8, 2.0);   // Oxygen
 
-    setElementMass(ctx, 6, 1.0);   // Carbon
-    setElementMass(ctx, 8, 2.0);   // Oxygen
-
+    auto& ctx = thermo.getContext();
     EXPECT_DOUBLE_EQ(ctx.io->dElementMass[6], 1.0);
     EXPECT_DOUBLE_EQ(ctx.io->dElementMass[8], 2.0);
 }
 
 TEST(ContextTest, Reset) {
-    ThermoContext ctx;
+    ThermoClass thermo;
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(6, 1.0);
 
-    setTemperaturePressure(ctx, 1000.0, 1.0);
-    setElementMass(ctx, 6, 1.0);
+    thermo.reset();
 
-    resetThermo(ctx);
-
+    auto& ctx = thermo.getContext();
     EXPECT_EQ(ctx.infoThermo(), 0);
     EXPECT_DOUBLE_EQ(ctx.io->dElementMass[6], 0.0);
 }

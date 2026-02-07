@@ -1,0 +1,14 @@
+{
+  "test_cases": [
+    {
+      "name": "exclude-runList_001",
+      "database": "NobleMetals-Kaye.dat",
+      "temperature": 400.0,
+      "pressure": 1.0,
+      "composition": {
+        "Mo": 0.9,
+        "Ru": 0.1
+      }
+    }
+  ]
+}
