@@ -49,9 +49,56 @@ ThermoClass::ThermoClass()
 
 ThermoClass::~ThermoClass() = default;
 
-ThermoClass::ThermoClass(ThermoClass&&) noexcept = default;
+ThermoClass::ThermoClass(ThermoClass&& other) noexcept
+    : context_(std::move(other.context_)),
+      state_(context_.thermo.get()),
+      io_(context_.io.get()),
+      gemState_(context_.gem.get()),
+      phaseConstraints_(context_.phaseConstraints.get()),
+      parser_(std::move(other.parser_)),
+      solver_(std::move(other.solver_)),
+      newtonSolver_(std::move(other.newtonSolver_)),
+      lineSearch_(std::move(other.lineSearch_)),
+      phaseManager_(std::move(other.phaseManager_)),
+      modelFactory_(std::move(other.modelFactory_)) {
 
-ThermoClass& ThermoClass::operator=(ThermoClass&&) noexcept = default;
+    // Rebuild strategies that hold references to state objects
+    // (they were constructed with references to the old context)
+    if (newtonSolver_) {
+        newtonSolver_ = std::make_unique<NewtonSolver>(*io_, phaseConstraints_);
+    }
+    if (phaseManager_) {
+        phaseManager_ = std::make_unique<PhaseAssemblageManager>(*state_, *gemState_, *io_);
+    }
+}
+
+ThermoClass& ThermoClass::operator=(ThermoClass&& other) noexcept {
+    if (this != &other) {
+        // Move the context and unique_ptr members
+        context_ = std::move(other.context_);
+        parser_ = std::move(other.parser_);
+        solver_ = std::move(other.solver_);
+        newtonSolver_ = std::move(other.newtonSolver_);
+        lineSearch_ = std::move(other.lineSearch_);
+        phaseManager_ = std::move(other.phaseManager_);
+        modelFactory_ = std::move(other.modelFactory_);
+
+        // Rebind raw pointers to new context
+        state_ = context_.thermo.get();
+        io_ = context_.io.get();
+        gemState_ = context_.gem.get();
+        phaseConstraints_ = context_.phaseConstraints.get();
+
+        // Rebuild strategies that hold references to state objects
+        if (newtonSolver_) {
+            newtonSolver_ = std::make_unique<NewtonSolver>(*io_, phaseConstraints_);
+        }
+        if (phaseManager_) {
+            phaseManager_ = std::make_unique<PhaseAssemblageManager>(*state_, *gemState_, *io_);
+        }
+    }
+    return *this;
+}
 
 void ThermoClass::initializeDefaultStrategies() {
     // Initialize model factory

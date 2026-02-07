@@ -47,6 +47,50 @@ TEST_F(ThermoClassTest, MoveSemantics) {
     EXPECT_EQ(thermo3.getInfoCode(), 0);
 }
 
+/// @brief Test that calculations work after move operations
+TEST_F(ThermoClassTest, MoveWithCalculation) {
+    // Create and configure a ThermoClass instance
+    ThermoClass thermo1;
+    thermo1.loadDatabase("CO.dat");
+    thermo1.setStandardUnits();
+    thermo1.setTemperaturePressure(1000.0, 1.0);
+    thermo1.setElementMass(6, 1.0);
+    thermo1.setElementMass(8, 1.0);
+
+    // Move construct and verify calculation works
+    ThermoClass thermo2(std::move(thermo1));
+    int result = thermo2.calculate();
+    EXPECT_EQ(result, 0) << "Calculation failed after move constructor: " << thermo2.getErrorMessage();
+    EXPECT_TRUE(thermo2.isSuccess());
+
+    // Verify results are accessible (tests that raw pointers were rebound)
+    double gibbs = thermo2.getGibbsEnergy();
+    EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
+
+    auto [moles, info] = thermo2.getMolesPhase("gas_ideal");
+    EXPECT_EQ(info, 0);
+    EXPECT_GT(moles, 0.0) << "Should have gas phase";
+
+    // Move assign and verify calculation works again
+    ThermoClass thermo3;
+    thermo3 = std::move(thermo2);
+
+    // Reset and run another calculation
+    thermo3.reset();
+    thermo3.setTemperaturePressure(1200.0, 1.0);
+    thermo3.setElementMass(6, 2.0);
+    thermo3.setElementMass(8, 1.0);
+
+    result = thermo3.calculate();
+    EXPECT_EQ(result, 0) << "Calculation failed after move assignment: " << thermo3.getErrorMessage();
+    EXPECT_TRUE(thermo3.isSuccess());
+
+    // Verify different results (different conditions)
+    double gibbs2 = thermo3.getGibbsEnergy();
+    EXPECT_LT(gibbs2, 0.0) << "Gibbs energy should be negative";
+    EXPECT_NE(gibbs, gibbs2) << "Different conditions should yield different Gibbs energy";
+}
+
 /// @brief Test basic database loading
 TEST_F(ThermoClassTest, LoadDatabase) {
     ThermoClass thermo;
