@@ -233,3 +233,49 @@ TEST_F(ThermoClassTest, ErrorHandling) {
     EXPECT_FALSE(errorMsg.empty()) << "Should have error message";
 }
 
+/// @brief Test mass unit conversion (grams and kilograms to moles)
+TEST_F(ThermoClassTest, MassUnitConversion) {
+    // Reference calculation with moles
+    ThermoClass thermoMoles;
+    thermoMoles.loadDatabase("CO.dat");
+    thermoMoles.setStandardUnits();  // K, atm, moles
+    thermoMoles.setTemperaturePressure(1000.0, 1.0);
+    thermoMoles.setElementMass(6, 1.0);  // 1 mole of Carbon
+    thermoMoles.setElementMass(8, 1.0);  // 1 mole of Oxygen
+    int result = thermoMoles.calculate();
+    EXPECT_EQ(result, 0) << "Reference calculation failed: " << thermoMoles.getErrorMessage();
+    double gibbsMoles = thermoMoles.getGibbsEnergy();
+
+    // Same calculation with grams (should give identical results)
+    // Carbon atomic mass ≈ 12.011 g/mol, Oxygen atomic mass ≈ 15.999 g/mol
+    ThermoClass thermoGrams;
+    thermoGrams.loadDatabase("CO.dat");
+    thermoGrams.setUnits("K", "atm", "grams");
+    thermoGrams.setTemperaturePressure(1000.0, 1.0);
+    thermoGrams.setElementMass(6, 12.011);  // ~12.011 grams of Carbon = 1 mole
+    thermoGrams.setElementMass(8, 15.999);  // ~15.999 grams of Oxygen = 1 mole
+    result = thermoGrams.calculate();
+    EXPECT_EQ(result, 0) << "Grams calculation failed: " << thermoGrams.getErrorMessage();
+    double gibbsGrams = thermoGrams.getGibbsEnergy();
+
+    // Results should be nearly identical (within tolerance for atomic mass precision)
+    // Tolerance of 5 J accounts for minor differences in atomic mass values
+    EXPECT_NEAR(gibbsMoles, gibbsGrams, 5.0)
+        << "Grams conversion should yield same Gibbs energy as moles";
+
+    // Same calculation with kilograms
+    ThermoClass thermoKg;
+    thermoKg.loadDatabase("CO.dat");
+    thermoKg.setUnits("K", "atm", "kilograms");
+    thermoKg.setTemperaturePressure(1000.0, 1.0);
+    thermoKg.setElementMass(6, 0.012011);  // 0.012011 kg of Carbon = 1 mole
+    thermoKg.setElementMass(8, 0.015999);  // 0.015999 kg of Oxygen = 1 mole
+    result = thermoKg.calculate();
+    EXPECT_EQ(result, 0) << "Kilograms calculation failed: " << thermoKg.getErrorMessage();
+    double gibbsKg = thermoKg.getGibbsEnergy();
+
+    // Results should be nearly identical
+    EXPECT_NEAR(gibbsMoles, gibbsKg, 5.0)
+        << "Kilograms conversion should yield same Gibbs energy as moles";
+}
+

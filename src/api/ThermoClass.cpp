@@ -650,8 +650,16 @@ void ThermoClass::computeThermoData() {
                                        L3 * T * T + L4 * T * T * T + L5 / T;
     }
 
-    // Compute element amounts
+    // Compute element amounts - convert from input mass units to moles
     state_->dMolesElement.setZero();
+
+    // Determine conversion factor based on mass unit (default to "moles" if not set)
+    std::string massUnit = io_->cInputUnitMass;
+    if (massUnit.empty()) {
+        massUnit = "moles";  // Default for backward compatibility
+    }
+    std::transform(massUnit.begin(), massUnit.end(), massUnit.begin(), ::tolower);
+
     for (int i = 0; i < Constants::kNumElementsPT; ++i) {
         if (io_->dElementMass[i] > 0.0) {
             // Find element in system
@@ -659,7 +667,36 @@ void ThermoClass::computeThermoData() {
                 // Match by atomic number
                 int atomicNum = getAtomicNumber(state_->cElementName[j]);
                 if (atomicNum == i) {
-                    state_->dMolesElement(j) = io_->dElementMass[i];
+                    double inputMass = io_->dElementMass[i];
+                    double moles = 0.0;
+
+                    // Convert to moles based on input unit
+                    if (massUnit == "moles" || massUnit == "mole" || massUnit == "mol") {
+                        // Already in moles, no conversion needed
+                        moles = inputMass;
+                    } else if (massUnit == "grams" || massUnit == "gram" || massUnit == "g") {
+                        // Convert grams to moles: moles = grams / atomic_mass
+                        double atomicMass = state_->dAtomicMass(j);
+                        if (atomicMass <= 0.0) {
+                            io_->INFOThermo = 42;  // Invalid atomic mass
+                            return;
+                        }
+                        moles = inputMass / atomicMass;
+                    } else if (massUnit == "kilograms" || massUnit == "kilogram" || massUnit == "kg") {
+                        // Convert kilograms to moles: moles = kg * 1000 / atomic_mass
+                        double atomicMass = state_->dAtomicMass(j);
+                        if (atomicMass <= 0.0) {
+                            io_->INFOThermo = 42;  // Invalid atomic mass
+                            return;
+                        }
+                        moles = (inputMass * 1000.0) / atomicMass;
+                    } else {
+                        // Unsupported mass unit
+                        io_->INFOThermo = 41;  // Unsupported unit
+                        return;
+                    }
+
+                    state_->dMolesElement(j) = moles;
                     break;
                 }
             }
