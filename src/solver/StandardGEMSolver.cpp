@@ -12,7 +12,7 @@
 namespace Thermochimica {
 
 StandardGEMSolver::StandardGEMSolver()
-    : phaseConstraints_(nullptr) {
+    : phaseConstraints_(std::make_unique<PhaseConstraints>()) {
 }
 
 int StandardGEMSolver::solve(ThermoState& state,
@@ -34,11 +34,9 @@ int StandardGEMSolver::solve(ThermoState& state,
     ctx.io.reset(ioPtr);
     ctx.gem.reset(gemPtr);
 
-    // Create empty PhaseConstraints for unconstrained solve
-    if (phaseConstraints_ == nullptr) {
-        phaseConstraints_ = new PhaseConstraints();
-    }
-    ctx.phaseConstraints.reset(phaseConstraints_);
+    // Transfer PhaseConstraints ownership to context for unconstrained solve
+    // (will be transferred back after solve completes)
+    ctx.phaseConstraints.reset(phaseConstraints_.release());
 
     // Call legacy solver
     int result = GEMSolver::solve(ctx);
@@ -47,7 +45,9 @@ int StandardGEMSolver::solve(ThermoState& state,
     ctx.thermo.release();
     ctx.io.release();
     ctx.gem.release();
-    phaseConstraints_ = ctx.phaseConstraints.release();
+
+    // Transfer PhaseConstraints ownership back to StandardGEMSolver
+    phaseConstraints_.reset(ctx.phaseConstraints.release());
 
     return result;
 }

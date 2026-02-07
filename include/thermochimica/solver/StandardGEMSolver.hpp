@@ -5,6 +5,7 @@
 #pragma once
 
 #include "thermochimica/interfaces/ISolver.hpp"
+#include <memory>
 
 namespace Thermochimica {
 
@@ -59,7 +60,7 @@ public:
     }
 
 private:
-    PhaseConstraints* phaseConstraints_;  ///< Pointer for temporary context bridge
+    std::unique_ptr<PhaseConstraints> phaseConstraints_;  ///< Owned PhaseConstraints for unconstrained solve
 };
 
 } // namespace Thermochimica
