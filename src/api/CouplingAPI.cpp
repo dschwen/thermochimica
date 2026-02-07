@@ -19,14 +19,20 @@ void TC_cleanup() {
     g_thermo = nullptr;
 }
 
-void TC_setThermoFilename(const char* filename) {
+void TC_loadDatabase(const char* filename) {
     TC_init();
     g_thermo->loadDatabase(filename);
 }
 
+// Deprecated: Use TC_loadDatabase instead
+void TC_setThermoFilename(const char* filename) {
+    TC_loadDatabase(filename);
+}
+
+// Deprecated: Database is loaded immediately by TC_loadDatabase
 void TC_parseDataFile() {
     // No-op: loadDatabase already parses the file
-    TC_init();
+    // This function is deprecated and does nothing
 }
 
 void TC_setTemperaturePressure(double T, double P) {
