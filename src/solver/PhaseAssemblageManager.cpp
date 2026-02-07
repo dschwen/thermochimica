@@ -290,12 +290,29 @@ bool PhaseAssemblageManager::addSolnPhase(int phaseIndex) {
     double initialMoles = 1e-6;
     state_.dMolesPhase(newPhaseIdx) = initialMoles;
 
-    // Initialize species mole fractions for this phase
+    // Count feasible species in this phase
+    int nFeasibleSpecies = 0;
     for (int i = iFirst; i < iLast; ++i) {
         if (speciesIsFeasible(i)) {
-            state_.dMolFraction(i) = 1.0 / (iLast - iFirst);
-            state_.dMolesSpecies(i) = state_.dMolFraction(i) * initialMoles;
-        } else {
+            ++nFeasibleSpecies;
+        }
+    }
+
+    // Initialize species mole fractions for this phase (normalize by feasible species only)
+    if (nFeasibleSpecies > 0) {
+        double fracPerSpecies = 1.0 / nFeasibleSpecies;
+        for (int i = iFirst; i < iLast; ++i) {
+            if (speciesIsFeasible(i)) {
+                state_.dMolFraction(i) = fracPerSpecies;
+                state_.dMolesSpecies(i) = fracPerSpecies * initialMoles;
+            } else {
+                state_.dMolFraction(i) = 0.0;
+                state_.dMolesSpecies(i) = 0.0;
+            }
+        }
+    } else {
+        // No feasible species - phase should not have been added
+        for (int i = iFirst; i < iLast; ++i) {
             state_.dMolFraction(i) = 0.0;
             state_.dMolesSpecies(i) = 0.0;
         }
@@ -374,8 +391,13 @@ bool PhaseAssemblageManager::addPureConPhase(int speciesIndex) {
 
     // Add the phase
     ++state_.nConPhases;
+    double initialMoles = 1e-6;
     state_.iAssemblage(state_.nConPhases - 1) = speciesIndex + 1;
-    state_.dMolesPhase(state_.nConPhases - 1) = 1e-6;
+    state_.dMolesPhase(state_.nConPhases - 1) = initialMoles;
+
+    // Set species moles and mole fraction consistently for pure condensed phase
+    state_.dMolesSpecies(speciesIndex) = initialMoles;
+    state_.dMolFraction(speciesIndex) = 1.0;
 
     return true;
 }
