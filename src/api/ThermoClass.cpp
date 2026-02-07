@@ -787,7 +787,9 @@ std::pair<double, int> ThermoClass::getElementMolesInPhase(const std::string& el
     int iLast = state_->nSpeciesPhase(phaseIdx + 1);
 
     for (int i = iFirst; i < iLast; ++i) {
-        sum += state_->dMolesSpecies(i) * state_->dStoichSpecies(i, elemIdx);
+        // Normalize by particles per mole for multi-particle species (e.g., ionic formula units)
+        double ppm = static_cast<double>(state_->iParticlesPerMole(i));
+        sum += state_->dMolesSpecies(i) * state_->dStoichSpecies(i, elemIdx) / ppm;
     }
 
     return {sum, 0};
