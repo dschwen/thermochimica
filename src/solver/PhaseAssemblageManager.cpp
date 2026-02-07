@@ -286,6 +286,15 @@ bool PhaseAssemblageManager::addSolnPhase(int phaseIndex) {
     state_.iAssemblage(newPhaseIdx) = -(phaseIndex + 1);
     gemState_.lSolnPhases[phaseIndex] = true;
 
+    // Mark miscibility partners as stable to prevent oscillation
+    // Miscibility partners share the same solution phase name
+    for (int p = 0; p < state_.nSolnPhasesSys; ++p) {
+        if (p != phaseIndex &&
+            state_.cSolnPhaseName[p] == state_.cSolnPhaseName[phaseIndex]) {
+            gemState_.lSolnPhases[p] = true;
+        }
+    }
+
     // Initialize phase moles
     double initialMoles = 1e-6;
     state_.dMolesPhase(newPhaseIdx) = initialMoles;
