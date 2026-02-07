@@ -3,7 +3,6 @@
 /// @details Adds debug output to understand why pure carbon produces 0 moles
 
 #include "thermochimica/ThermoClass.hpp"
-#include "thermochimica/Thermochimica.hpp"
 #include <iostream>
 #include <iomanip>
 

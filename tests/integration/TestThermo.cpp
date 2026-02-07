@@ -3,7 +3,7 @@
 /// @details Tests error handling, basic calculations, and spot tests
 
 #include <gtest/gtest.h>
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <thermochimica/util/ErrorCodes.hpp>
 #include <cmath>
 
@@ -23,27 +23,27 @@ inline bool relativeError(double actual, double expected, double tolerance = 1e-
 
 // TestThermo01: No data file specified
 TEST(ThermoErrorTests, Test01_NoDataFile) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, 300.0, 1.0);
-    setElementMass(ctx, 6, 1.0);  // C
-    setElementMass(ctx, 8, 1.0);  // O
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(300.0, 1.0);
+    thermo.setElementMass(6, 1.0);  // C
+    thermo.setElementMass(8, 1.0);  // O
     // Don't load data file
-    thermochimica(ctx);
-    EXPECT_NE(ctx.infoThermo(), 0);
+    thermo.calculate();
+    EXPECT_NE(thermo.getInfoCode(), 0);
 }
 
 // TestThermo02: Non-existent data file
 TEST(ThermoErrorTests, Test02_BadDataFile) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, 300.0, 1.0);
-    setElementMass(ctx, 6, 1.0);
-    setElementMass(ctx, 8, 1.0);
-    setThermoFilename(ctx, "nonexistent/CO.dat");
-    parseCSDataFile(ctx);
-    thermochimica(ctx);
-    EXPECT_NE(ctx.infoThermo(), 0);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(300.0, 1.0);
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 1.0);
+    thermo.setThermoFilename("nonexistent/CO.dat");
+    thermo.parseCSDataFile();
+    thermo.calculate();
+    EXPECT_NE(thermo.getInfoCode(), 0);
 }
 
 // TestThermo03: No input units specified - REMOVED
@@ -52,120 +52,120 @@ TEST(ThermoErrorTests, Test02_BadDataFile) {
 
 // TestThermo04: No temperature specified
 TEST(ThermoErrorTests, Test04_NoTemperature) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
     // Don't set temperature (leave at 0)
-    ctx.io->dPressure = 1.0;
-    setElementMass(ctx, 6, 1.0);
-    setElementMass(ctx, 8, 1.0);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
-    thermochimica(ctx);
-    EXPECT_EQ(ctx.infoThermo(), ErrorCode::kTemperatureOutOfRange);
+    thermo.getContext().io->dPressure = 1.0;
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 1.0);
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
+    thermo.calculate();
+    EXPECT_EQ(thermo.getInfoCode(), ErrorCode::kTemperatureOutOfRange);
 }
 
 // TestThermo05: No pressure specified
 TEST(ThermoErrorTests, Test05_NoPressure) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    ctx.io->dTemperature = 300.0;
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.getContext().io->dTemperature = 300.0;
     // Don't set pressure (leave at 0)
-    setElementMass(ctx, 6, 1.0);
-    setElementMass(ctx, 8, 1.0);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
-    thermochimica(ctx);
-    EXPECT_EQ(ctx.infoThermo(), ErrorCode::kPressureOutOfRange);
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 1.0);
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
+    thermo.calculate();
+    EXPECT_EQ(thermo.getInfoCode(), ErrorCode::kPressureOutOfRange);
 }
 
 // TestThermo06: No element mass specified
 TEST(ThermoErrorTests, Test06_NoMass) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, 300.0, 1.0);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(300.0, 1.0);
     // Don't set any element masses
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
-    thermochimica(ctx);
-    EXPECT_EQ(ctx.infoThermo(), ErrorCode::kCompositionOutOfRange);
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
+    thermo.calculate();
+    EXPECT_EQ(thermo.getInfoCode(), ErrorCode::kCompositionOutOfRange);
 }
 
 // TestThermo07: Temperature too low
 TEST(ThermoErrorTests, Test07_TemperatureTooLow) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, -100.0, 1.0);  // Negative temperature
-    setElementMass(ctx, 6, 1.0);
-    setElementMass(ctx, 8, 1.0);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
-    thermochimica(ctx);
-    EXPECT_EQ(ctx.infoThermo(), ErrorCode::kTemperatureOutOfRange);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(-100.0, 1.0);  // Negative temperature
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 1.0);
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
+    thermo.calculate();
+    EXPECT_EQ(thermo.getInfoCode(), ErrorCode::kTemperatureOutOfRange);
 }
 
 // TestThermo08: Pressure too low
 TEST(ThermoErrorTests, Test08_PressureTooLow) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, 300.0, -1.0);  // Negative pressure
-    setElementMass(ctx, 6, 1.0);
-    setElementMass(ctx, 8, 1.0);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
-    thermochimica(ctx);
-    EXPECT_EQ(ctx.infoThermo(), ErrorCode::kPressureOutOfRange);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(300.0, -1.0);  // Negative pressure
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 1.0);
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
+    thermo.calculate();
+    EXPECT_EQ(thermo.getInfoCode(), ErrorCode::kPressureOutOfRange);
 }
 
 // TestThermo09: Mass too low (negative)
 TEST(ThermoErrorTests, Test09_MassTooLow) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, 300.0, 1.0);
-    setElementMass(ctx, 6, -1.0);  // Negative mass
-    setElementMass(ctx, 8, 1.0);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
-    thermochimica(ctx);
-    EXPECT_EQ(ctx.infoThermo(), ErrorCode::kCompositionOutOfRange);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(300.0, 1.0);
+    thermo.setElementMass(6, -1.0);  // Negative mass
+    thermo.setElementMass(8, 1.0);
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
+    thermo.calculate();
+    EXPECT_EQ(thermo.getInfoCode(), ErrorCode::kCompositionOutOfRange);
 }
 
 // TestThermo10: Pressure NaN
 TEST(ThermoErrorTests, Test10_PressureNaN) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, 300.0, std::nan(""));  // NaN pressure
-    setElementMass(ctx, 6, 1.0);
-    setElementMass(ctx, 8, 1.0);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
-    thermochimica(ctx);
-    EXPECT_EQ(ctx.infoThermo(), ErrorCode::kPressureOutOfRange);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(300.0, std::nan(""));  // NaN pressure
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 1.0);
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
+    thermo.calculate();
+    EXPECT_EQ(thermo.getInfoCode(), ErrorCode::kPressureOutOfRange);
 }
 
 // TestThermo11: Temperature NaN
 TEST(ThermoErrorTests, Test11_TemperatureNaN) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, std::nan(""), 1.0);  // NaN temperature
-    setElementMass(ctx, 6, 1.0);
-    setElementMass(ctx, 8, 1.0);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
-    thermochimica(ctx);
-    EXPECT_EQ(ctx.infoThermo(), ErrorCode::kTemperatureOutOfRange);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(std::nan(""), 1.0);  // NaN temperature
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 1.0);
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
+    thermo.calculate();
+    EXPECT_EQ(thermo.getInfoCode(), ErrorCode::kTemperatureOutOfRange);
 }
 
 // TestThermo12: Mass NaN
 TEST(ThermoErrorTests, Test12_MassNaN) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, 300.0, 1.0);
-    setElementMass(ctx, 6, std::nan(""));  // NaN mass
-    setElementMass(ctx, 8, 1.0);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
-    thermochimica(ctx);
-    EXPECT_EQ(ctx.infoThermo(), ErrorCode::kCompositionOutOfRange);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setTemperaturePressure(300.0, 1.0);
+    thermo.setElementMass(6, std::nan(""));  // NaN mass
+    thermo.setElementMass(8, 1.0);
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
+    thermo.calculate();
+    EXPECT_EQ(thermo.getInfoCode(), ErrorCode::kCompositionOutOfRange);
 }
 
 //=============================================================================
@@ -174,25 +174,25 @@ TEST(ThermoErrorTests, Test12_MassNaN) {
 
 // Basic C-O test at 1000K - should produce CO2 gas
 TEST(ThermoBasicTests, CO_1000K_CO2) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 1000.0, 1.0);
-    setElementMass(ctx, 6, 1.0);   // 1 mol C
-    setElementMass(ctx, 8, 2.0);   // 2 mol O
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(6, 1.0);   // 1 mol C
+    thermo.setElementMass(8, 2.0);   // 2 mol O
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
     // Should converge to ~1 mol CO2 gas
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     EXPECT_TRUE(relativeError(gibbs, -629533.0, 0.01))
         << "Gibbs energy mismatch: " << gibbs;
 }
@@ -200,28 +200,28 @@ TEST(ThermoBasicTests, CO_1000K_CO2) {
 // C-O test with excess oxygen - produces CO2 + O2
 // NOTE: This test may fail if the solver doesn't handle excess O correctly
 TEST(ThermoBasicTests, CO_ExcessOxygen) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 1000.0, 1.0);
-    setElementMass(ctx, 6, 1.0);   // 1 mol C
-    setElementMass(ctx, 8, 4.0);   // 4 mol O (excess - should get CO2 + O2)
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(6, 1.0);   // 1 mol C
+    thermo.setElementMass(8, 4.0);   // 4 mol O (excess - should get CO2 + O2)
 
-    thermochimica(ctx);
+    thermo.calculate();
 
     // Even if solver doesn't converge perfectly, check we got a result
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         // For now, just skip - excess oxygen handling may need more work
         GTEST_SKIP() << "Excess oxygen test not converging - needs solver improvements";
     }
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
 }
 
@@ -231,28 +231,28 @@ TEST(ThermoBasicTests, CO_ExcessOxygen) {
 
 // TestThermo30: W-Au-Ar-O at 1455K
 TEST(ThermoSpotTests, Test30_WAuArO_1455K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "WAuArO-1.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("WAuArO-1.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file WAuArO-1.dat not available (error "
-                     << ctx.infoThermo() << ": "
-                     << getErrorMessage(ctx.infoThermo()) << ")";
+                     << thermo.getInfoCode() << ": "
+                     << thermo.getErrorMessage() << ")";
     }
 
-    setTemperaturePressure(ctx, 1455.0, 1.0);
-    setElementMass(ctx, 74, 1.95);  // W
-    setElementMass(ctx, 79, 1.0);   // Au
-    setElementMass(ctx, 18, 2.0);   // Ar
-    setElementMass(ctx, 8, 10.0);   // O
+    thermo.setTemperaturePressure(1455.0, 1.0);
+    thermo.setElementMass(74, 1.95);  // W
+    thermo.setElementMass(79, 1.0);   // Au
+    thermo.setElementMass(18, 2.0);   // Ar
+    thermo.setElementMass(8, 10.0);   // O
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     // NOTE: C++ gives ~3.5% different result due to solver numerical differences
     EXPECT_TRUE(relativeError(gibbs, -4.620e5, 0.05))
         << "Gibbs energy mismatch: " << gibbs << " vs expected -4.620e5";
@@ -261,26 +261,26 @@ TEST(ThermoSpotTests, Test30_WAuArO_1455K) {
 // TestThermo31: W-Au-Ar-O different conditions
 // NOTE: C++ gives ~3.5% different result due to solver numerical differences
 TEST(ThermoSpotTests, Test31_WAuArO_Variant) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "WAuArO-2.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("WAuArO-2.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file WAuArO-2.dat not available";
     }
 
-    setTemperaturePressure(ctx, 1455.0, 1.0);
-    setElementMass(ctx, 74, 1.95);  // W
-    setElementMass(ctx, 79, 1.0);   // Au
-    setElementMass(ctx, 18, 2.0);   // Ar
-    setElementMass(ctx, 8, 10.0);   // O
+    thermo.setTemperaturePressure(1455.0, 1.0);
+    thermo.setElementMass(74, 1.95);  // W
+    thermo.setElementMass(79, 1.0);   // Au
+    thermo.setElementMass(18, 2.0);   // Ar
+    thermo.setElementMass(8, 10.0);   // O
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     EXPECT_TRUE(relativeError(gibbs, -4.620e5, 0.05))
         << "Gibbs energy mismatch: " << gibbs;
 }
@@ -291,68 +291,68 @@ TEST(ThermoSpotTests, Test31_WAuArO_Variant) {
 
 // TestThermo40: Mo-Ru at 2250K
 TEST(ThermoNobleMetals, Test40_MoRu_2250K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file NobleMetals-Kaye.dat not available (error "
-                     << ctx.infoThermo() << ": " << getErrorMessage(ctx.infoThermo()) << ")";
+                     << thermo.getInfoCode() << ": " << thermo.getErrorMessage() << ")";
     }
 
-    setTemperaturePressure(ctx, 2250.0, 1.0);
-    setElementMass(ctx, 42, 0.8);  // Mo
-    setElementMass(ctx, 44, 0.2);  // Ru
+    thermo.setTemperaturePressure(2250.0, 1.0);
+    thermo.setElementMass(42, 0.8);  // Mo
+    thermo.setElementMass(44, 0.2);  // Ru
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     EXPECT_TRUE(relativeError(gibbs, -1.44373e5, 0.01))
         << "Gibbs energy mismatch: " << gibbs << " vs expected -1.44373e5";
 }
 
 // TestThermo41: Mo-Pd at 2000K
 TEST(ThermoNobleMetals, Test41_MoPd_2000K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 2000.0, 1.0);
-    setElementMass(ctx, 42, 0.5);  // Mo
-    setElementMass(ctx, 46, 0.5);  // Pd
+    thermo.setTemperaturePressure(2000.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(46, 0.5);  // Pd
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 }
 
 // TestThermo42: Mo-Ru-Tc at 1800K
 TEST(ThermoNobleMetals, Test42_MoRuTc_1800K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 1800.0, 1.0);
-    setElementMass(ctx, 42, 0.4);  // Mo
-    setElementMass(ctx, 44, 0.3);  // Ru
-    setElementMass(ctx, 43, 0.3);  // Tc
+    thermo.setTemperaturePressure(1800.0, 1.0);
+    thermo.setElementMass(42, 0.4);  // Mo
+    thermo.setElementMass(44, 0.3);  // Ru
+    thermo.setElementMass(43, 0.3);  // Tc
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 }
 
 //=============================================================================
@@ -360,23 +360,23 @@ TEST(ThermoNobleMetals, Test42_MoRuTc_1800K) {
 //=============================================================================
 
 TEST(ThermoMiscibility, TernaryMiscibility) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "ternaryMiscibility-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("ternaryMiscibility-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file ternaryMiscibility-Kaye.dat not available";
     }
 
-    setTemperaturePressure(ctx, 1000.0, 1.0);
-    setElementMass(ctx, 42, 0.33);  // Mo
-    setElementMass(ctx, 44, 0.33);  // Ru
-    setElementMass(ctx, 46, 0.34);  // Pd
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(42, 0.33);  // Mo
+    thermo.setElementMass(44, 0.33);  // Ru
+    thermo.setElementMass(46, 0.34);  // Pd
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    EXPECT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    EXPECT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 }
 
 //=============================================================================
@@ -384,38 +384,38 @@ TEST(ThermoMiscibility, TernaryMiscibility) {
 //=============================================================================
 
 TEST(ThermoReset, ResetBetweenCalculations) {
-    ThermoContext ctx;
+    ThermoClass thermo;
 
     // First calculation
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 1000.0, 1.0);
-    setElementMass(ctx, 6, 1.0);
-    setElementMass(ctx, 8, 2.0);
-    thermochimica(ctx);
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 2.0);
+    thermo.calculate();
 
-    double gibbs1 = getGibbsEnergy(ctx);
-    ASSERT_EQ(ctx.infoThermo(), 0);
+    double gibbs1 = thermo.getGibbsEnergy();
+    ASSERT_EQ(thermo.getInfoCode(), 0);
 
     // Reset and do second calculation at different temperature
-    resetThermo(ctx);
+    thermo.reset();
 
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
-    setTemperaturePressure(ctx, 1500.0, 1.0);
-    setElementMass(ctx, 6, 1.0);
-    setElementMass(ctx, 8, 2.0);
-    thermochimica(ctx);
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 2.0);
+    thermo.calculate();
 
-    double gibbs2 = getGibbsEnergy(ctx);
-    ASSERT_EQ(ctx.infoThermo(), 0);
+    double gibbs2 = thermo.getGibbsEnergy();
+    ASSERT_EQ(thermo.getInfoCode(), 0);
 
     // Gibbs energy should be different at different temperatures
     EXPECT_NE(gibbs1, gibbs2);
@@ -426,36 +426,36 @@ TEST(ThermoReset, ResetBetweenCalculations) {
 //=============================================================================
 
 TEST(ThermoHeatCapacity, BasicHeatCapacity) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 1000.0, 1.0);
-    setElementMass(ctx, 6, 1.0);
-    setElementMass(ctx, 8, 2.0);
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 2.0);
 
     // Enable heat capacity calculation before running solver
-    setHeatCapacityEntropyEnthalpy(ctx, true);
+    thermo.setHeatCapacityEntropyEnthalpy(true);
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Calculation failed, cannot test heat capacity";
     }
 
     // Heat capacity calculation
-    double cp = getHeatCapacity(ctx);
+    double cp = thermo.getHeatCapacity();
     // For CO2 at 1000K, Cp should be around 50-60 J/mol/K per mole
     EXPECT_GT(cp, 0.0) << "Heat capacity should be positive";
 
     // Also check entropy and enthalpy
-    double s = getEntropy(ctx);
-    double h = getEnthalpy(ctx);
+    double s = thermo.getEntropy();
+    double h = thermo.getEnthalpy();
     EXPECT_GT(s, 0.0) << "Entropy should be positive";
     EXPECT_FALSE(std::isnan(h)) << "Enthalpy should be a valid number";
 }
@@ -468,24 +468,24 @@ TEST(ThermoHeatCapacity, BasicHeatCapacity) {
 // NOTE: At low temperature, phase selection differs from Fortran reference.
 // The C++ solver converges but may select different phases. Marked as TODO.
 TEST(ThermoNobleMetals, Test43_PdRu_400K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file NobleMetals-Kaye.dat not available";
     }
 
-    setTemperaturePressure(ctx, 400.0, 1.0);
-    setElementMass(ctx, 46, 0.4);  // Pd
-    setElementMass(ctx, 44, 0.6);  // Ru
+    thermo.setTemperaturePressure(400.0, 1.0);
+    thermo.setElementMass(46, 0.4);  // Pd
+    thermo.setElementMass(44, 0.6);  // Ru
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     // Fortran reference: -1.33770e4 J
     // Current C++ result: ~-5917 J (phase selection differs at low T)
     // For now, just verify we get a reasonable negative Gibbs energy
@@ -496,121 +496,121 @@ TEST(ThermoNobleMetals, Test43_PdRu_400K) {
 // TestThermo44: Pd-Tc at 1000K - HCPN phase
 // NOTE: C++ gives ~2% different result due to numerical differences in solver
 TEST(ThermoNobleMetals, Test44_PdTc_1000K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 1000.0, 1.0);
-    setElementMass(ctx, 46, 40.0);  // Pd
-    setElementMass(ctx, 43, 60.0);  // Tc
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(46, 40.0);  // Pd
+    thermo.setElementMass(43, 60.0);  // Tc
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     EXPECT_TRUE(relativeError(gibbs, -5.04309e6, 0.03))
         << "Gibbs energy mismatch: " << gibbs << " vs expected -5.04309e6";
 }
 
 // TestThermo45: Tc-Ru at 1234K - HCPN phase (dilute Tc)
 TEST(ThermoNobleMetals, Test45_TcRu_1234K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 1234.0, 1.0);
-    setElementMass(ctx, 43, 1.0);   // Tc (1%)
-    setElementMass(ctx, 44, 99.0);  // Ru (99%)
+    thermo.setTemperaturePressure(1234.0, 1.0);
+    thermo.setElementMass(43, 1.0);   // Tc (1%)
+    thermo.setElementMass(44, 99.0);  // Ru (99%)
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     EXPECT_TRUE(relativeError(gibbs, -5.64282e6, 0.01))
         << "Gibbs energy mismatch: " << gibbs << " vs expected -5.64282e6";
 }
 
 // TestThermo46: Tc-Ru at 2250K - HCPN phase
 TEST(ThermoNobleMetals, Test46_TcRu_2250K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 2250.0, 1.0);
-    setElementMass(ctx, 43, 0.55);  // Tc
-    setElementMass(ctx, 44, 0.45);  // Ru
+    thermo.setTemperaturePressure(2250.0, 1.0);
+    thermo.setElementMass(43, 0.55);  // Tc
+    thermo.setElementMass(44, 0.45);  // Ru
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     EXPECT_TRUE(relativeError(gibbs, -1.54452e5, 0.01))
         << "Gibbs energy mismatch: " << gibbs << " vs expected -1.54452e5";
 }
 
 // TestThermo47: Mo-Pd at 1500K - Binary system at different T
 TEST(ThermoNobleMetals, Test47_MoPd_1500K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 1500.0, 1.0);
-    setElementMass(ctx, 42, 0.3);  // Mo
-    setElementMass(ctx, 46, 0.7);  // Pd
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(42, 0.3);  // Mo
+    thermo.setElementMass(46, 0.7);  // Pd
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
 }
 
 // TestThermo48: Quaternary system Mo-Ru-Tc-Pd at 1800K
 TEST(ThermoNobleMetals, Test48_Quaternary_1800K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 1800.0, 1.0);
-    setElementMass(ctx, 42, 0.25);  // Mo
-    setElementMass(ctx, 44, 0.25);  // Ru
-    setElementMass(ctx, 43, 0.25);  // Tc
-    setElementMass(ctx, 46, 0.25);  // Pd
+    thermo.setTemperaturePressure(1800.0, 1.0);
+    thermo.setElementMass(42, 0.25);  // Mo
+    thermo.setElementMass(44, 0.25);  // Ru
+    thermo.setElementMass(43, 0.25);  // Tc
+    thermo.setElementMass(46, 0.25);  // Pd
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
 }
 
@@ -619,60 +619,60 @@ TEST(ThermoNobleMetals, Test48_Quaternary_1800K) {
 //=============================================================================
 
 TEST(ThermoTemperatureRange, MoRu_LowTemp_500K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 500.0, 1.0);
-    setElementMass(ctx, 42, 0.5);  // Mo
-    setElementMass(ctx, 44, 0.5);  // Ru
+    thermo.setTemperaturePressure(500.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(44, 0.5);  // Ru
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 }
 
 TEST(ThermoTemperatureRange, MoRu_MidTemp_1500K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 1500.0, 1.0);
-    setElementMass(ctx, 42, 0.5);  // Mo
-    setElementMass(ctx, 44, 0.5);  // Ru
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(44, 0.5);  // Ru
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 }
 
 TEST(ThermoTemperatureRange, MoRu_HighTemp_2500K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 2500.0, 1.0);
-    setElementMass(ctx, 42, 0.5);  // Mo
-    setElementMass(ctx, 44, 0.5);  // Ru
+    thermo.setTemperaturePressure(2500.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(44, 0.5);  // Ru
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 }
 
 //=============================================================================
@@ -680,60 +680,60 @@ TEST(ThermoTemperatureRange, MoRu_HighTemp_2500K) {
 //=============================================================================
 
 TEST(ThermoCompositionRange, MoRu_MoRich) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 2000.0, 1.0);
-    setElementMass(ctx, 42, 0.95);  // Mo (95%)
-    setElementMass(ctx, 44, 0.05);  // Ru (5%)
+    thermo.setTemperaturePressure(2000.0, 1.0);
+    thermo.setElementMass(42, 0.95);  // Mo (95%)
+    thermo.setElementMass(44, 0.05);  // Ru (5%)
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 }
 
 TEST(ThermoCompositionRange, MoRu_RuRich) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 2000.0, 1.0);
-    setElementMass(ctx, 42, 0.05);  // Mo (5%)
-    setElementMass(ctx, 44, 0.95);  // Ru (95%)
+    thermo.setTemperaturePressure(2000.0, 1.0);
+    thermo.setElementMass(42, 0.05);  // Mo (5%)
+    thermo.setElementMass(44, 0.95);  // Ru (95%)
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 }
 
 TEST(ThermoCompositionRange, MoRu_Equal) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 2000.0, 1.0);
-    setElementMass(ctx, 42, 0.5);  // Mo (50%)
-    setElementMass(ctx, 44, 0.5);  // Ru (50%)
+    thermo.setTemperaturePressure(2000.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo (50%)
+    thermo.setElementMass(44, 0.5);  // Ru (50%)
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 }
 
 //=============================================================================
@@ -742,24 +742,24 @@ TEST(ThermoCompositionRange, MoRu_Equal) {
 
 // TestThermo49: Pd-Tc at 1900K - Liquid phase expected
 TEST(ThermoNobleMetals, Test49_PdTc_1900K_Liquid) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 1900.0, 1.0);
-    setElementMass(ctx, 46, 0.874);  // Pd
-    setElementMass(ctx, 43, 0.125);  // Tc
+    thermo.setTemperaturePressure(1900.0, 1.0);
+    thermo.setElementMass(46, 0.874);  // Pd
+    thermo.setElementMass(43, 0.125);  // Tc
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     // Fortran reference: -1.28092e5 J
     EXPECT_TRUE(relativeError(gibbs, -1.28092e5, 0.03))
         << "Gibbs energy mismatch: " << gibbs << " vs expected -1.28092e5";
@@ -770,25 +770,25 @@ TEST(ThermoNobleMetals, Test49_PdTc_1900K_Liquid) {
 // different phase assemblage selection or ternary interaction handling.
 // Just verify convergence for now.
 TEST(ThermoNobleMetals, Test52_MoPdRu_1973K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 1973.0, 1.0);
-    setElementMass(ctx, 42, 0.3);  // Mo
-    setElementMass(ctx, 46, 0.4);  // Pd
-    setElementMass(ctx, 44, 0.3);  // Ru
+    thermo.setTemperaturePressure(1973.0, 1.0);
+    thermo.setElementMass(42, 0.3);  // Mo
+    thermo.setElementMass(46, 0.4);  // Pd
+    thermo.setElementMass(44, 0.3);  // Ru
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     // Fortran reference: -1.38528e5 J
     // C++ gives ~-190723 J (different phase assemblage)
     EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
@@ -800,25 +800,25 @@ TEST(ThermoNobleMetals, Test52_MoPdRu_1973K) {
 // different phase assemblage selection or ternary interaction handling.
 // Just verify convergence for now.
 TEST(ThermoNobleMetals, Test53_MoPdRu_973K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 973.0, 1.0);
-    setElementMass(ctx, 42, 0.1);  // Mo
-    setElementMass(ctx, 46, 0.3);  // Pd
-    setElementMass(ctx, 44, 0.6);  // Ru
+    thermo.setTemperaturePressure(973.0, 1.0);
+    thermo.setElementMass(42, 0.1);  // Mo
+    thermo.setElementMass(46, 0.3);  // Pd
+    thermo.setElementMass(44, 0.6);  // Ru
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     // Fortran reference: -4.90922e4 J
     // C++ gives ~-98805 J (different phase assemblage at lower T)
     EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
@@ -827,25 +827,25 @@ TEST(ThermoNobleMetals, Test53_MoPdRu_973K) {
 
 // TestThermo54: Ternary Mo-Pd-Tc at 1800K - BCCN phase (Mo-rich)
 TEST(ThermoNobleMetals, Test54_MoPdTc_1800K_MoRich) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("NobleMetals-Kaye.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file not available";
     }
 
-    setTemperaturePressure(ctx, 1800.0, 1.0);
-    setElementMass(ctx, 42, 0.9);   // Mo (90%)
-    setElementMass(ctx, 46, 0.09);  // Pd (9%)
-    setElementMass(ctx, 43, 0.01);  // Tc (1%)
+    thermo.setTemperaturePressure(1800.0, 1.0);
+    thermo.setElementMass(42, 0.9);   // Mo (90%)
+    thermo.setElementMass(46, 0.09);  // Pd (9%)
+    thermo.setElementMass(43, 0.01);  // Tc (1%)
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     // Fortran reference: -1.05595e5 J
     EXPECT_TRUE(relativeError(gibbs, -1.05595e5, 0.03))
         << "Gibbs energy mismatch: " << gibbs << " vs expected -1.05595e5";
@@ -857,26 +857,26 @@ TEST(ThermoNobleMetals, Test54_MoPdTc_1800K_MoRich) {
 
 // TestThermo30: W-Au-Ar-O at 1455K (uses WAuArO-1.dat)
 TEST(ThermoWAuArO, Test30_WAuArO_1455K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "WAuArO-1.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("WAuArO-1.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file WAuArO-1.dat not available";
     }
 
-    setTemperaturePressure(ctx, 1455.0, 1.0);
-    setElementMass(ctx, 74, 1.95);  // W
-    setElementMass(ctx, 79, 1.0);   // Au
-    setElementMass(ctx, 18, 2.0);   // Ar
-    setElementMass(ctx, 8, 10.0);   // O
+    thermo.setTemperaturePressure(1455.0, 1.0);
+    thermo.setElementMass(74, 1.95);  // W
+    thermo.setElementMass(79, 1.0);   // Au
+    thermo.setElementMass(18, 2.0);   // Ar
+    thermo.setElementMass(8, 10.0);   // O
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     // Fortran reference: -4.620e5 J
     EXPECT_TRUE(relativeError(gibbs, -4.620e5, 0.05))
         << "Gibbs energy mismatch: " << gibbs << " vs expected -4.620e5";
@@ -885,52 +885,52 @@ TEST(ThermoWAuArO, Test30_WAuArO_1455K) {
 // TestThermo32: W-Au-Ar-Ne-O at 2452K (uses WAuArNeO-1.dat)
 // NOTE: High temperature gas-dominated system with positive Gibbs energy
 TEST(ThermoWAuArO, Test32_WAuArNeO_2452K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "WAuArNeO-1.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("WAuArNeO-1.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file WAuArNeO-1.dat not available";
     }
 
-    setTemperaturePressure(ctx, 2452.0, 1.0);
-    setElementMass(ctx, 74, 1.95);  // W
-    setElementMass(ctx, 79, 1.0);   // Au
-    setElementMass(ctx, 18, 2.0);   // Ar
-    setElementMass(ctx, 8, 10.0);   // O
-    setElementMass(ctx, 10, 10.0);  // Ne
+    thermo.setTemperaturePressure(2452.0, 1.0);
+    thermo.setElementMass(74, 1.95);  // W
+    thermo.setElementMass(79, 1.0);   // Au
+    thermo.setElementMass(18, 2.0);   // Ar
+    thermo.setElementMass(8, 10.0);   // O
+    thermo.setElementMass(10, 10.0);  // Ne
 
-    thermochimica(ctx);
+    thermo.calculate();
 
     // Just check convergence - gas phase results may differ
-    EXPECT_TRUE(ctx.infoThermo() == 0 || ctx.infoThermo() > 0)
-        << "Calculation error: " << ctx.infoThermo();
+    EXPECT_TRUE(thermo.getInfoCode() == 0 || thermo.getInfoCode() > 0)
+        << "Calculation error: " << thermo.getInfoCode();
 }
 
 // TestThermo33: W-Au-Ar-Ne-O at 900K (uses WAuArNeO-2.dat)
 TEST(ThermoWAuArO, Test33_WAuArNeO_900K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "WAuArNeO-2.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("WAuArNeO-2.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file WAuArNeO-2.dat not available";
     }
 
-    setTemperaturePressure(ctx, 900.0, 2.0);
-    setElementMass(ctx, 74, 20.0);  // W
-    setElementMass(ctx, 79, 2.0);   // Au
-    setElementMass(ctx, 18, 7.0);   // Ar
-    setElementMass(ctx, 8, 5.0);    // O
-    setElementMass(ctx, 10, 1.0);   // Ne
+    thermo.setTemperaturePressure(900.0, 2.0);
+    thermo.setElementMass(74, 20.0);  // W
+    thermo.setElementMass(79, 2.0);   // Au
+    thermo.setElementMass(18, 7.0);   // Ar
+    thermo.setElementMass(8, 5.0);    // O
+    thermo.setElementMass(10, 1.0);   // Ne
 
-    thermochimica(ctx);
+    thermo.calculate();
 
     // Just check convergence - gas phase results may differ
-    EXPECT_TRUE(ctx.infoThermo() == 0 || ctx.infoThermo() > 0)
-        << "Calculation error: " << ctx.infoThermo();
+    EXPECT_TRUE(thermo.getInfoCode() == 0 || thermo.getInfoCode() > 0)
+        << "Calculation error: " << thermo.getInfoCode();
 }
 
 //=============================================================================
@@ -939,25 +939,25 @@ TEST(ThermoWAuArO, Test33_WAuArNeO_900K) {
 
 // TestThermo60: Ti-V-O at 2000K - SlagB and Hema solution phases
 TEST(ThermoFeTiVO, Test60_TiVO_2000K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "FeTiVO.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("FeTiVO.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
-        GTEST_SKIP() << "FeTiVO.dat parsing failed (SUBQ not implemented): error " << ctx.infoThermo();
+    if (thermo.getInfoCode() != 0) {
+        GTEST_SKIP() << "FeTiVO.dat parsing failed (SUBQ not implemented): error " << thermo.getInfoCode();
     }
 
-    setTemperaturePressure(ctx, 2000.0, 1.0);
-    setElementMass(ctx, 8, 2.0);   // O
-    setElementMass(ctx, 22, 0.5);  // Ti
-    setElementMass(ctx, 23, 0.5);  // V
+    thermo.setTemperaturePressure(2000.0, 1.0);
+    thermo.setElementMass(8, 2.0);   // O
+    thermo.setElementMass(22, 0.5);  // Ti
+    thermo.setElementMass(23, 0.5);  // V
 
-    thermochimica(ctx);
+    thermo.calculate();
 
     // SUBQ model may not be fully implemented - just check convergence
-    if (ctx.infoThermo() == 0) {
-        double gibbs = getGibbsEnergy(ctx);
+    if (thermo.getInfoCode() == 0) {
+        double gibbs = thermo.getGibbsEnergy();
         // Fortran reference: -1.09209e6 J
         EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
     } else {
@@ -967,26 +967,26 @@ TEST(ThermoFeTiVO, Test60_TiVO_2000K) {
 
 // TestThermo61: Fe-Ti-V-O at 1500K
 TEST(ThermoFeTiVO, Test61_FeTiVO_1500K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "FeTiVO.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("FeTiVO.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
-        GTEST_SKIP() << "FeTiVO.dat parsing failed (SUBQ not implemented): error " << ctx.infoThermo();
+    if (thermo.getInfoCode() != 0) {
+        GTEST_SKIP() << "FeTiVO.dat parsing failed (SUBQ not implemented): error " << thermo.getInfoCode();
     }
 
-    setTemperaturePressure(ctx, 1500.0, 1.0);
-    setElementMass(ctx, 8, 2.0);   // O
-    setElementMass(ctx, 22, 0.3);  // Ti
-    setElementMass(ctx, 23, 0.3);  // V
-    setElementMass(ctx, 26, 0.4);  // Fe
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(8, 2.0);   // O
+    thermo.setElementMass(22, 0.3);  // Ti
+    thermo.setElementMass(23, 0.3);  // V
+    thermo.setElementMass(26, 0.4);  // Fe
 
-    thermochimica(ctx);
+    thermo.calculate();
 
     // SUBQ model may not be fully implemented - just check convergence
-    if (ctx.infoThermo() == 0) {
-        double gibbs = getGibbsEnergy(ctx);
+    if (thermo.getInfoCode() == 0) {
+        double gibbs = thermo.getGibbsEnergy();
         EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
     } else {
         GTEST_SKIP() << "SUBQ model not yet fully implemented";
@@ -999,51 +999,51 @@ TEST(ThermoFeTiVO, Test61_FeTiVO_1500K) {
 
 // TestThermo70: Sn-O at 1500K - IONIC_LIQ with miscibility gap
 TEST(ThermoZIRC, Test70_SnO_1500K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "ZIRC_no_liq.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("ZIRC_no_liq.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
-        GTEST_SKIP() << "ZIRC_no_liq.dat parsing failed (SUBI not fully supported): error " << ctx.infoThermo();
+    if (thermo.getInfoCode() != 0) {
+        GTEST_SKIP() << "ZIRC_no_liq.dat parsing failed (SUBI not fully supported): error " << thermo.getInfoCode();
     }
 
-    setTemperaturePressure(ctx, 1500.0, 1.0);
-    setElementMass(ctx, 8, 0.3);   // O
-    setElementMass(ctx, 50, 0.7);  // Sn
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(8, 0.3);   // O
+    thermo.setElementMass(50, 0.7);  // Sn
 
-    thermochimica(ctx);
+    thermo.calculate();
 
     // SUBI model may not be fully implemented - just check convergence
-    if (ctx.infoThermo() == 0) {
-        double gibbs = getGibbsEnergy(ctx);
+    if (thermo.getInfoCode() == 0) {
+        double gibbs = thermo.getGibbsEnergy();
         // Fortran reference: -181212 J
         EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
     } else {
-        GTEST_SKIP() << "SUBI calculation failed: error " << ctx.infoThermo();
+        GTEST_SKIP() << "SUBI calculation failed: error " << thermo.getInfoCode();
     }
 }
 
 // TestThermo71: Zr-O at 1000K
 TEST(ThermoZIRC, Test71_ZrO_1000K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "ZIRC_no_liq.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("ZIRC_no_liq.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file ZIRC_no_liq.dat not available or parsing failed";
     }
 
-    setTemperaturePressure(ctx, 1000.0, 1.0);
-    setElementMass(ctx, 8, 1.0);   // O
-    setElementMass(ctx, 40, 1.0);  // Zr
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(8, 1.0);   // O
+    thermo.setElementMass(40, 1.0);  // Zr
 
-    thermochimica(ctx);
+    thermo.calculate();
 
     // SUBI model may not be fully implemented - just check convergence
-    if (ctx.infoThermo() == 0) {
-        double gibbs = getGibbsEnergy(ctx);
+    if (thermo.getInfoCode() == 0) {
+        double gibbs = thermo.getGibbsEnergy();
         EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
     } else {
         GTEST_SKIP() << "SUBI model not yet fully implemented";
@@ -1057,48 +1057,48 @@ TEST(ThermoZIRC, Test71_ZrO_1000K) {
 
 // TestThermo80: C-O at 1500K - should be mostly CO gas
 TEST(ThermoGasPhase, Test80_CO_1500K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file CO.dat not available";
     }
 
-    setTemperaturePressure(ctx, 1500.0, 1.0);
-    setElementMass(ctx, 6, 1.0);   // C
-    setElementMass(ctx, 8, 1.0);   // O
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(6, 1.0);   // C
+    thermo.setElementMass(8, 1.0);   // O
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     // Fortran reference: ~-3.5e5 J
     EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
 }
 
 // TestThermo81: C-O at 2000K - higher temperature gas
 TEST(ThermoGasPhase, Test81_CO_2000K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("CO.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file CO.dat not available";
     }
 
-    setTemperaturePressure(ctx, 2000.0, 1.0);
-    setElementMass(ctx, 6, 1.0);   // C
-    setElementMass(ctx, 8, 2.0);   // O (excess)
+    thermo.setTemperaturePressure(2000.0, 1.0);
+    thermo.setElementMass(6, 1.0);   // C
+    thermo.setElementMass(8, 2.0);   // O (excess)
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    ASSERT_EQ(ctx.infoThermo(), 0) << "Calculation failed";
+    ASSERT_EQ(thermo.getInfoCode(), 0) << "Calculation failed";
 
-    double gibbs = getGibbsEnergy(ctx);
+    double gibbs = thermo.getGibbsEnergy();
     EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
 }
 
@@ -1108,34 +1108,34 @@ TEST(ThermoGasPhase, Test81_CO_2000K) {
 
 // TestThermo14: Parser test - many solution phases (PdRuTcMo.dat)
 TEST(ThermoParser, Test14_ManySolnPhases) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "PdRuTcMo.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("PdRuTcMo.dat");
+    thermo.parseCSDataFile();
 
     // Just verify parsing succeeds
-    EXPECT_EQ(ctx.infoThermo(), 0) << "Failed to parse PdRuTcMo.dat";
+    EXPECT_EQ(thermo.getInfoCode(), 0) << "Failed to parse PdRuTcMo.dat";
 }
 
 // CsI test (simple ionic system)
 TEST(ThermoIonic, CsI_1000K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "CsI-Pham.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("CsI-Pham.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file CsI-Pham.dat not available";
     }
 
-    setTemperaturePressure(ctx, 1000.0, 1.0);
-    setElementMass(ctx, 55, 1.0);  // Cs
-    setElementMass(ctx, 53, 1.0);  // I
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(55, 1.0);  // Cs
+    thermo.setElementMass(53, 1.0);  // I
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    if (ctx.infoThermo() == 0) {
-        double gibbs = getGibbsEnergy(ctx);
+    if (thermo.getInfoCode() == 0) {
+        double gibbs = thermo.getGibbsEnergy();
         EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
     } else {
         GTEST_SKIP() << "Ionic model not yet fully implemented";
@@ -1144,23 +1144,23 @@ TEST(ThermoIonic, CsI_1000K) {
 
 // CsTe test - SUBI ionic sublattice model
 TEST(ThermoIonic, CsTe_800K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "CsTe-1.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("CsTe-1.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
-        GTEST_SKIP() << "CsTe-1.dat parsing failed: error " << ctx.infoThermo();
+    if (thermo.getInfoCode() != 0) {
+        GTEST_SKIP() << "CsTe-1.dat parsing failed: error " << thermo.getInfoCode();
     }
 
-    setTemperaturePressure(ctx, 800.0, 1.0);
-    setElementMass(ctx, 55, 2.0);  // Cs
-    setElementMass(ctx, 52, 1.0);  // Te
+    thermo.setTemperaturePressure(800.0, 1.0);
+    thermo.setElementMass(55, 2.0);  // Cs
+    thermo.setElementMass(52, 1.0);  // Te
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    if (ctx.infoThermo() == 0) {
-        double gibbs = getGibbsEnergy(ctx);
+    if (thermo.getInfoCode() == 0) {
+        double gibbs = thermo.getGibbsEnergy();
         EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
     } else {
         GTEST_SKIP() << "Model not yet fully implemented";
@@ -1169,24 +1169,24 @@ TEST(ThermoIonic, CsTe_800K) {
 
 // CaMnS test - SUBI/SUBL with magnetic species
 TEST(ThermoSulfide, CaMnS_1200K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "CaMnS.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("CaMnS.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
-        GTEST_SKIP() << "CaMnS.dat parsing failed: error " << ctx.infoThermo();
+    if (thermo.getInfoCode() != 0) {
+        GTEST_SKIP() << "CaMnS.dat parsing failed: error " << thermo.getInfoCode();
     }
 
-    setTemperaturePressure(ctx, 1200.0, 1.0);
-    setElementMass(ctx, 20, 0.5);  // Ca
-    setElementMass(ctx, 25, 0.5);  // Mn
-    setElementMass(ctx, 16, 1.0);  // S
+    thermo.setTemperaturePressure(1200.0, 1.0);
+    thermo.setElementMass(20, 0.5);  // Ca
+    thermo.setElementMass(25, 0.5);  // Mn
+    thermo.setElementMass(16, 1.0);  // S
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    if (ctx.infoThermo() == 0) {
-        double gibbs = getGibbsEnergy(ctx);
+    if (thermo.getInfoCode() == 0) {
+        double gibbs = thermo.getGibbsEnergy();
         EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
     } else {
         GTEST_SKIP() << "Model not yet fully implemented";
@@ -1195,24 +1195,24 @@ TEST(ThermoSulfide, CaMnS_1200K) {
 
 // ClAlNa test
 TEST(ThermoHalide, ClAlNa_1000K) {
-    ThermoContext ctx;
-    setStandardUnits(ctx);
-    setThermoFilename(ctx, "ClAlNa.dat");
-    parseCSDataFile(ctx);
+    ThermoClass thermo;
+    thermo.setStandardUnits();
+    thermo.setThermoFilename("ClAlNa.dat");
+    thermo.parseCSDataFile();
 
-    if (ctx.infoThermo() != 0) {
+    if (thermo.getInfoCode() != 0) {
         GTEST_SKIP() << "Data file ClAlNa.dat not available";
     }
 
-    setTemperaturePressure(ctx, 1000.0, 1.0);
-    setElementMass(ctx, 17, 4.0);  // Cl
-    setElementMass(ctx, 13, 1.0);  // Al
-    setElementMass(ctx, 11, 1.0);  // Na
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(17, 4.0);  // Cl
+    thermo.setElementMass(13, 1.0);  // Al
+    thermo.setElementMass(11, 1.0);  // Na
 
-    thermochimica(ctx);
+    thermo.calculate();
 
-    if (ctx.infoThermo() == 0) {
-        double gibbs = getGibbsEnergy(ctx);
+    if (thermo.getInfoCode() == 0) {
+        double gibbs = thermo.getGibbsEnergy();
         EXPECT_LT(gibbs, 0.0) << "Gibbs energy should be negative";
     } else {
         GTEST_SKIP() << "Model not yet fully implemented";

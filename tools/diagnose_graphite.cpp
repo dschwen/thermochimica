@@ -3,7 +3,6 @@
 /// @details Runs Tests A-D from PHASE1_DIAGNOSTICS.md
 
 #include "thermochimica/ThermoClass.hpp"
-#include "thermochimica/Thermochimica.hpp"
 #include <iostream>
 #include <iomanip>
 

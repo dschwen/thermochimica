@@ -1,8 +1,8 @@
-# Class-Based API Documentation
+# ThermoClass API Documentation
 
 ## Overview
 
-Thermochimica now provides a modern, object-oriented C++ API through the `ThermoClass` class. This replaces the previous pattern of passing `ThermoContext&` to free functions, providing a more intuitive and safer interface.
+Thermochimica provides a modern, object-oriented C++ API through the `ThermoClass` class. This is the canonical and recommended interface for all applications.
 
 ## Key Benefits
 
@@ -10,8 +10,9 @@ Thermochimica now provides a modern, object-oriented C++ API through the `Thermo
 - **Encapsulation**: All state contained within `ThermoClass` instance
 - **Thread-Safe**: Multiple independent instances can run in parallel
 - **Extensibility**: Strategy pattern allows custom solvers, models, and line search algorithms
-- **Type Safety**: Member functions instead of free functions
-- **100% Backward Compatible**: Existing free-function API continues to work
+- **Type Safety**: Member functions with compile-time checking
+- **RAII Semantics**: Automatic resource management
+- **Move Semantics**: Efficient resource transfer
 
 ## Basic Usage
 
@@ -281,26 +282,25 @@ thermo.setLineSearch(std::make_unique<MyCustomLineSearch>());
 thermo.calculate();  // Uses custom solver
 ```
 
-## Legacy Compatibility
+## Advanced: Accessing Internal State
 
-The class-based API can interoperate with legacy code using `getContext()`:
+For advanced use cases requiring direct state access, use `getContext()`:
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>  // Free functions
-
 ThermoClass thermo;
 thermo.loadDatabase("CO.dat");
 thermo.setStandardUnits();
 thermo.setTemperaturePressure(1000.0, 1.0);
 
-// Access underlying context for legacy functions
+// Access underlying context for direct state manipulation
 ThermoContext& ctx = thermo.getContext();
 
-// Can use legacy free functions on the context
-Thermochimica::setElementMass(ctx, 6, 1.0);
-Thermochimica::thermochimica(ctx);
-
-double gibbs = Thermochimica::getGibbsEnergy(ctx);
+// Direct access to internal state
+double T = ctx.io->dTemperature;
+auto& state = *ctx.thermo;
+for (int i = 0; i < state.nSpecies; ++i) {
+    double x = state.dMolFraction(i);
+}
 ```
 
 ## API Reference
@@ -357,39 +357,13 @@ double gibbs = Thermochimica::getGibbsEnergy(ctx);
 - `ThermoContext& getContext()` - Get underlying context for legacy code
 - `const ThermoContext& getContext() const` - Get const context
 
-## Migration Guide
+## Migration from Old Code
 
-### From Free Function API
-
-**Old style:**
-```cpp
-ThermoContext ctx;
-setThermoFilename(ctx, "CO.dat");
-parseCSDataFile(ctx);
-setStandardUnits(ctx);
-setTemperaturePressure(ctx, 1000.0, 1.0);
-setElementMass(ctx, 6, 1.0);
-setElementMass(ctx, 8, 2.0);
-thermochimica(ctx);
-auto [moles, info] = getMolesPhase(ctx, "gas_ideal");
-```
-
-**New style:**
-```cpp
-ThermoClass thermo;
-thermo.loadDatabase("CO.dat");
-thermo.setStandardUnits();
-thermo.setTemperaturePressure(1000.0, 1.0);
-thermo.setElementMass(6, 1.0);
-thermo.setElementMass(8, 2.0);
-thermo.calculate();
-auto [moles, info] = thermo.getMolesPhase("gas_ideal");
-```
-
-The transformation is straightforward:
-1. Replace `ThermoContext ctx` with `ThermoClass thermo`
-2. Remove `ctx,` from all function calls and make them member function calls
-3. Replace `thermochimica(ctx)` with `thermo.calculate()`
+If migrating from older code, see the comprehensive [Migration Guide](MIGRATION_FROM_FREE_FUNCTIONS.md) for:
+- Complete API mapping tables
+- Common migration patterns
+- Before/after examples
+- Troubleshooting tips
 
 ## Performance
 

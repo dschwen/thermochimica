@@ -22,47 +22,48 @@ make
 This example calculates the equilibrium composition of C + 2O at 1000 K and 1 atm.
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <iostream>
 
 int main() {
-    // 1. Create a context (holds all state)
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
+
+    // 1. Create Thermochimica instance
+    ThermoClass thermo;
 
     // 2. Set units: Kelvin, atmospheres, moles
-    Thermochimica::setStandardUnits(ctx);
+    thermo.setStandardUnits();
 
     // 3. Load thermodynamic database
-    Thermochimica::setThermoFilename(ctx, "CO.dat");
-    Thermochimica::parseCSDataFile(ctx);
+    int result = thermo.loadDatabase("CO.dat");
 
-    if (ctx.infoThermo() != 0) {
+    if (result != 0) {
         std::cerr << "Failed to load database: "
-                  << Thermochimica::getErrorMessage(ctx.infoThermo())
+                  << thermo.getErrorMessage()
                   << std::endl;
         return 1;
     }
 
     // 4. Set thermodynamic conditions
-    Thermochimica::setTemperaturePressure(ctx, 1000.0, 1.0);
+    thermo.setTemperaturePressure(1000.0, 1.0);
 
     // 5. Set composition by atomic number
-    Thermochimica::setElementMass(ctx, 6, 1.0);   // 1 mol Carbon (Z=6)
-    Thermochimica::setElementMass(ctx, 8, 2.0);   // 2 mol Oxygen (Z=8)
+    thermo.setElementMass(6, 1.0);   // 1 mol Carbon (Z=6)
+    thermo.setElementMass(8, 2.0);   // 2 mol Oxygen (Z=8)
 
     // 6. Run equilibrium calculation
-    Thermochimica::thermochimica(ctx);
+    thermo.calculate();
 
     // 7. Check results
-    if (ctx.isSuccess()) {
+    if (thermo.isSuccess()) {
         std::cout << "Gibbs Energy: "
-                  << Thermochimica::getGibbsEnergy(ctx)
+                  << thermo.getGibbsEnergy()
                   << " J" << std::endl;
 
-        Thermochimica::printResults(ctx);
+        thermo.printResults();
     } else {
         std::cerr << "Calculation failed: "
-                  << Thermochimica::getErrorMessage(ctx.infoThermo())
+                  << thermo.getErrorMessage()
                   << std::endl;
         return 1;
     }
@@ -73,33 +74,32 @@ int main() {
 
 ## Step-by-Step Explanation
 
-### Step 1: Create Context
+### Step 1: Create ThermoClass Instance
 
 ```cpp
-Thermochimica::ThermoContext ctx;
+Thermochimica::ThermoClass thermo;
 ```
 
-The `ThermoContext` holds all calculation state. Each context is independent, enabling thread-safe parallel calculations.
+The `ThermoClass` encapsulates all calculation state. Each instance is independent, enabling thread-safe parallel calculations.
 
 ### Step 2: Set Units
 
 ```cpp
-Thermochimica::setStandardUnits(ctx);  // K, atm, moles
+thermo.setStandardUnits();  // K, atm, moles
 ```
 
 Standard units are Kelvin, atmospheres, and moles. For other units:
 
 ```cpp
-Thermochimica::setUnitTemperature(ctx, "C");    // Celsius
-Thermochimica::setUnitPressure(ctx, "bar");     // bar
-Thermochimica::setUnitMass(ctx, "grams");       // grams
+thermo.setUnitTemperature("C");    // Celsius
+thermo.setUnitPressure("bar");     // bar
+thermo.setUnitMass("grams");       // grams
 ```
 
 ### Step 3: Load Database
 
 ```cpp
-Thermochimica::setThermoFilename(ctx, "CO.dat");
-Thermochimica::parseCSDataFile(ctx);
+int result = thermo.loadDatabase("CO.dat");
 ```
 
 Database files use ChemSage format (`.dat`). See [Databases](databases.md) for available files.
@@ -107,7 +107,7 @@ Database files use ChemSage format (`.dat`). See [Databases](databases.md) for a
 Always check for parse errors:
 
 ```cpp
-if (ctx.infoThermo() != 0) {
+if (result != 0) {
     // Handle error
 }
 ```
@@ -115,7 +115,7 @@ if (ctx.infoThermo() != 0) {
 ### Step 4: Set Conditions
 
 ```cpp
-Thermochimica::setTemperaturePressure(ctx, 1000.0, 1.0);
+thermo.setTemperaturePressure(1000.0, 1.0);
 ```
 
 Temperature and pressure in your chosen units.
@@ -123,8 +123,8 @@ Temperature and pressure in your chosen units.
 ### Step 5: Set Composition
 
 ```cpp
-Thermochimica::setElementMass(ctx, 6, 1.0);   // Carbon by atomic number
-Thermochimica::setElementMass(ctx, "O", 2.0); // Oxygen by symbol
+thermo.setElementMass(6, 1.0);   // Carbon by atomic number
+thermo.setElementMass("O", 2.0); // Oxygen by symbol
 ```
 
 Elements can be specified by atomic number (1-118) or symbol.
@@ -132,7 +132,7 @@ Elements can be specified by atomic number (1-118) or symbol.
 ### Step 6: Run Calculation
 
 ```cpp
-Thermochimica::thermochimica(ctx);
+thermo.calculate();
 ```
 
 This runs the complete GEM solver to find equilibrium.
@@ -140,8 +140,8 @@ This runs the complete GEM solver to find equilibrium.
 ### Step 7: Get Results
 
 ```cpp
-if (ctx.isSuccess()) {
-    double G = Thermochimica::getGibbsEnergy(ctx);
+if (thermo.isSuccess()) {
+    double G = thermo.getGibbsEnergy();
     // Access more results...
 }
 ```

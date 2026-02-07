@@ -4,7 +4,6 @@
 
 #include <gtest/gtest.h>
 #include "thermochimica/ThermoClass.hpp"
-#include "thermochimica/Thermochimica.hpp"
 #include <cmath>
 
 using namespace Thermochimica;
@@ -78,51 +77,6 @@ TEST_F(ThermoClassTest, InputConfiguration) {
     thermo.setUnitsSI();
 
     EXPECT_TRUE(thermo.isSuccess());
-}
-
-/// @brief Compare class-based API with free-function API for C-O system
-TEST_F(ThermoClassTest, CompareWithFreeFunctionAPI_CO) {
-    // ===== Class-based API =====
-    ThermoClass thermo;
-    thermo.loadDatabase("CO.dat");
-    thermo.setStandardUnits();
-    thermo.setTemperaturePressure(1000.0, 1.0);
-    thermo.setElementMass(6, 1.0);   // C
-    thermo.setElementMass(8, 2.0);   // O
-
-    int result1 = thermo.calculate();
-    EXPECT_EQ(result1, 0) << "Class-based calculation failed: " << thermo.getErrorMessage();
-
-    double gibbs1 = thermo.getGibbsEnergy();
-    auto [molesCO2_1, info1] = thermo.getMolesPhase("gas_ideal");
-    auto [chemPotC_1, info2] = thermo.getOutputChemPot("C");
-
-    // ===== Free-function API =====
-    ThermoContext ctx;
-    setThermoFilename(ctx, "CO.dat");
-    parseCSDataFile(ctx);
-    setStandardUnits(ctx);
-    setTemperaturePressure(ctx, 1000.0, 1.0);
-    setElementMass(ctx, 6, 1.0);   // C
-    setElementMass(ctx, 8, 2.0);   // O
-
-    thermochimica(ctx);
-    int result2 = ctx.infoThermo();
-    EXPECT_EQ(result2, 0) << "Free-function calculation failed";
-
-    double gibbs2 = getGibbsEnergy(ctx);
-    auto [molesCO2_2, info3] = getMolesPhase(ctx, "gas_ideal");
-    auto [chemPotC_2, info4] = getOutputChemPot(ctx, "C");
-
-    // ===== Compare results =====
-    EXPECT_TRUE(approxEqual(gibbs1, gibbs2))
-        << "Gibbs energy mismatch: " << gibbs1 << " vs " << gibbs2;
-
-    EXPECT_TRUE(approxEqual(molesCO2_1, molesCO2_2))
-        << "Gas phase moles mismatch: " << molesCO2_1 << " vs " << molesCO2_2;
-
-    EXPECT_TRUE(approxEqual(chemPotC_1, chemPotC_2))
-        << "C chemical potential mismatch: " << chemPotC_1 << " vs " << chemPotC_2;
 }
 
 /// @brief Test phase constraints with class-based API
@@ -235,23 +189,3 @@ TEST_F(ThermoClassTest, ErrorHandling) {
     EXPECT_FALSE(errorMsg.empty()) << "Should have error message";
 }
 
-/// @brief Test getContext for legacy compatibility
-TEST_F(ThermoClassTest, LegacyCompatibility) {
-    ThermoClass thermo;
-    thermo.loadDatabase("CO.dat");
-    thermo.setStandardUnits();
-    thermo.setTemperaturePressure(1000.0, 1.0);
-    thermo.setElementMass(6, 1.0);
-    thermo.setElementMass(8, 2.0);
-
-    // Access underlying context for legacy code
-    ThermoContext& ctx = thermo.getContext();
-
-    // Can use legacy functions on the context
-    EXPECT_NO_THROW({
-        thermochimica(ctx);
-    });
-
-    int result = ctx.infoThermo();
-    EXPECT_EQ(result, 0);
-}
