@@ -112,19 +112,26 @@ void ThermoClass::setParser(std::unique_ptr<IParser> parser) {
 // =========================================================================
 
 void ThermoClass::setTemperature(double temperature) {
-    // Convert to internal units (K) immediately to prevent drift on repeated calculate() calls
-    io_->dTemperature = io_->convertTemperatureToKelvin(temperature);
+    // Store raw input value and mark for conversion during initialize()
+    // This allows setting temperature before or after setting units
+    io_->dTemperatureInput = temperature;
+    io_->bTemperatureConverted = false;
 }
 
 void ThermoClass::setPressure(double pressure) {
-    // Convert to internal units (atm) immediately to prevent drift on repeated calculate() calls
-    io_->dPressure = io_->convertPressureToAtm(pressure);
+    // Store raw input value and mark for conversion during initialize()
+    // This allows setting pressure before or after setting units
+    io_->dPressureInput = pressure;
+    io_->bPressureConverted = false;
 }
 
 void ThermoClass::setTemperaturePressure(double temperature, double pressure) {
-    // Convert to internal units (K, atm) immediately to prevent drift on repeated calculate() calls
-    io_->dTemperature = io_->convertTemperatureToKelvin(temperature);
-    io_->dPressure = io_->convertPressureToAtm(pressure);
+    // Store raw input values and mark for conversion during initialize()
+    // This allows setting values before or after setting units
+    io_->dTemperatureInput = temperature;
+    io_->dPressureInput = pressure;
+    io_->bTemperatureConverted = false;
+    io_->bPressureConverted = false;
 }
 
 void ThermoClass::setElementMass(int atomicNumber, double mass) {
@@ -157,10 +164,14 @@ void ThermoClass::setUnits(const std::string& tempUnit, const std::string& press
 
 void ThermoClass::setUnitTemperature(const std::string& unit) {
     io_->cInputUnitTemperature = unit;
+    // Mark temperature for reconversion with new unit
+    io_->bTemperatureConverted = false;
 }
 
 void ThermoClass::setUnitPressure(const std::string& unit) {
     io_->cInputUnitPressure = unit;
+    // Mark pressure for reconversion with new unit
+    io_->bPressureConverted = false;
 }
 
 void ThermoClass::setUnitMass(const std::string& unit) {
@@ -447,8 +458,18 @@ void ThermoClass::initialize() {
     // Initialize tolerances
     state_->tolerances.initDefaults();
 
-    // Unit conversion now happens in setters (setTemperature, setPressure, setTemperaturePressure)
-    // to prevent drift on repeated calculate() calls
+    // Convert input units to internal units (K, atm) only if not already converted
+    // This prevents double-conversion on repeated calculate() calls while allowing
+    // temperature/pressure to be set before or after unit configuration
+    if (!io_->bTemperatureConverted) {
+        io_->dTemperature = io_->convertTemperatureToKelvin(io_->dTemperatureInput);
+        io_->bTemperatureConverted = true;
+    }
+
+    if (!io_->bPressureConverted) {
+        io_->dPressure = io_->convertPressureToAtm(io_->dPressureInput);
+        io_->bPressureConverted = true;
+    }
 }
 
 void ThermoClass::checkSystem() {
@@ -1039,11 +1060,17 @@ void ThermoClass::setReinitData(const std::vector<int>& assemblage,
 
 void ThermoClass::reset() {
     context_.resetThermo();
+    // Mark values for reconversion after reset
+    io_->bTemperatureConverted = false;
+    io_->bPressureConverted = false;
 }
 
 void ThermoClass::resetAll() {
     context_.resetAll();
     initializeDefaultStrategies();
+    // Mark values for reconversion after full reset
+    io_->bTemperatureConverted = false;
+    io_->bPressureConverted = false;
 }
 
 void ThermoClass::validateConfiguration() const {

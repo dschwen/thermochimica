@@ -68,7 +68,7 @@ TEST(ThermoErrorTests, Test04_NoTemperature) {
 TEST(ThermoErrorTests, Test05_NoPressure) {
     ThermoClass thermo;
     thermo.setStandardUnits();
-    thermo.getContext().io->dTemperature = 300.0;
+    thermo.setTemperature(300.0);  // Use proper setter instead of direct assignment
     // Don't set pressure (leave at 0)
     thermo.setElementMass(6, 1.0);
     thermo.setElementMass(8, 1.0);

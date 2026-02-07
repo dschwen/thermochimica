@@ -41,8 +41,11 @@ TEST(ContextTest, SetTemperaturePressure) {
     thermo.setTemperaturePressure(1000.0, 1.0);
 
     auto& ctx = thermo.getContext();
-    EXPECT_DOUBLE_EQ(ctx.io->dTemperature, 1000.0);
-    EXPECT_DOUBLE_EQ(ctx.io->dPressure, 1.0);
+    // Values are stored as raw input until initialize() converts them
+    EXPECT_DOUBLE_EQ(ctx.io->dTemperatureInput, 1000.0);
+    EXPECT_DOUBLE_EQ(ctx.io->dPressureInput, 1.0);
+    EXPECT_FALSE(ctx.io->bTemperatureConverted);
+    EXPECT_FALSE(ctx.io->bPressureConverted);
 }
 
 TEST(ContextTest, SetElementMass) {
