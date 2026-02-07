@@ -353,6 +353,11 @@ bool PhaseAssemblageManager::removeSolnPhase(int phaseIndex) {
         state_.dMolesPhase(idx) = state_.dMolesPhase(idx + 1);
     }
 
+    // Clear the last solution phase slot to prevent stale data
+    int lastSlot = state_.nElements - 1;
+    state_.iAssemblage(lastSlot) = 0;
+    state_.dMolesPhase(lastSlot) = 0.0;
+
     --state_.nSolnPhases;
     return true;
 }
@@ -428,6 +433,10 @@ bool PhaseAssemblageManager::removePureConPhase(int speciesIndex) {
         state_.iAssemblage(i) = state_.iAssemblage(i + 1);
         state_.dMolesPhase(i) = state_.dMolesPhase(i + 1);
     }
+
+    // Clear the last condensed phase slot to prevent stale data
+    state_.iAssemblage(state_.nConPhases - 1) = 0;
+    state_.dMolesPhase(state_.nConPhases - 1) = 0.0;
 
     --state_.nConPhases;
     return true;
