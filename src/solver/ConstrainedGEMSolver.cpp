@@ -25,25 +25,25 @@ int ConstrainedGEMSolver::solve(ThermoState& state,
     // Create temporary context for bridge to legacy solver
     ThermoContext ctx;
 
-    // Temporarily move state references into context
-    ThermoState* statePtr = &state;
-    ThermoIO* ioPtr = &io;
-    GEMState* gemPtr = &gemState;
-    PhaseConstraints* constraintsPtr = &constraints_;
+    // Temporarily borrow state references
+    ctx.thermo.reset(&state);
+    ctx.io.reset(&io);
+    ctx.gem.reset(&gemState);
+    ctx.phaseConstraints.reset(&constraints_);
 
-    ctx.thermo.reset(statePtr);
-    ctx.io.reset(ioPtr);
-    ctx.gem.reset(gemPtr);
-    ctx.phaseConstraints.reset(constraintsPtr);
+    // RAII guard ensures release() is called even if exception is thrown
+    struct Guard {
+        ThermoContext& ctx;
+        ~Guard() {
+            ctx.thermo.release();
+            ctx.io.release();
+            ctx.gem.release();
+            ctx.phaseConstraints.release();
+        }
+    } guard{ctx};
 
-    // Call legacy solver (will detect active constraints and run constrained path)
+    // Call legacy solver (exception-safe with guard)
     int result = GEMSolver::solve(ctx);
-
-    // Release pointers so they won't be deleted when ctx goes out of scope
-    ctx.thermo.release();
-    ctx.io.release();
-    ctx.gem.release();
-    ctx.phaseConstraints.release();
 
     return result;
 }
@@ -52,18 +52,21 @@ void ConstrainedGEMSolver::initialize(ThermoState& state, GEMState& gemState) {
     // Create temporary context for bridge to legacy init
     ThermoContext ctx;
 
-    ThermoState* statePtr = &state;
-    GEMState* gemPtr = &gemState;
+    // Temporarily borrow state references
+    ctx.thermo.reset(&state);
+    ctx.gem.reset(&gemState);
 
-    ctx.thermo.reset(statePtr);
-    ctx.gem.reset(gemPtr);
+    // RAII guard ensures release() is called even if exception is thrown
+    struct Guard {
+        ThermoContext& ctx;
+        ~Guard() {
+            ctx.thermo.release();
+            ctx.gem.release();
+        }
+    } guard{ctx};
 
-    // Call legacy init
+    // Call legacy init (exception-safe with guard)
     GEMSolver::init(ctx);
-
-    // Release pointers
-    ctx.thermo.release();
-    ctx.gem.release();
 }
 
 bool ConstrainedGEMSolver::isConverged(const ThermoState& state,

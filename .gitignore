@@ -32,3 +32,35 @@ doc/test/
 
 # Private/local
 private_tests/
+
+# CMake generated files (prevent in-source builds from being tracked)
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+Makefile
+cmake_install.cmake
+install_manifest.txt
+DartConfiguration.tcl
+Testing/
+_deps/
+
+# CMake config files (except our templates)
+*Config.cmake
+*ConfigVersion.cmake
+!cmake/*Config.cmake.in
+
+# Build executables (tools)
+batch_validate
+check_elements
+diagnose_graphite
+diagnose_with_trace
+example_basic
+integration_tests
+unit_tests
+
+# Generated test files
+*[1]_include.cmake
+*[1]_tests.cmake
+
+# Legacy build artifacts
+legacy/

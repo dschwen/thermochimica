@@ -22,7 +22,8 @@ class PhaseConstraints;
 class StandardGEMSolver : public ISolver {
 public:
     /// @brief Constructor
-    StandardGEMSolver();
+    /// @param constraints Reference to PhaseConstraints (should be empty for unconstrained solve)
+    StandardGEMSolver(PhaseConstraints& constraints);
 
     /// @brief Run solver to convergence
     /// @param state Thermodynamic state
@@ -60,7 +61,7 @@ public:
     }
 
 private:
-    std::unique_ptr<PhaseConstraints> phaseConstraints_;  ///< Owned PhaseConstraints for unconstrained solve
+    PhaseConstraints& constraints_;  ///< Reference to PhaseConstraints (not owned)
 };
 
 } // namespace Thermochimica

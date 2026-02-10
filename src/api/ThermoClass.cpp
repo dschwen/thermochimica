@@ -114,7 +114,8 @@ void ThermoClass::initializeDefaultStrategies() {
     phaseManager_ = std::make_unique<PhaseAssemblageManager>(*state_, *gemState_, *io_);
 
     // Initialize default solver (standard unconstrained)
-    solver_ = std::make_unique<StandardGEMSolver>();
+    // Pass reference to PhaseConstraints so both solvers use the same instance
+    solver_ = std::make_unique<StandardGEMSolver>(*phaseConstraints_);
 }
 
 // =========================================================================
@@ -324,7 +325,7 @@ void ThermoClass::removePhaseConstraint(const std::string& phaseName) {
 
         // Switch back to standard solver if no constraints remain
         if (!phaseConstraints_->hasActiveConstraints()) {
-            solver_ = std::make_unique<StandardGEMSolver>();
+            solver_ = std::make_unique<StandardGEMSolver>(*phaseConstraints_);
         }
         return;
     }
@@ -343,7 +344,7 @@ void ThermoClass::removePhaseConstraint(const std::string& phaseName) {
 
     // Switch back to standard solver if no constraints remain
     if (!phaseConstraints_->hasActiveConstraints()) {
-        solver_ = std::make_unique<StandardGEMSolver>();
+        solver_ = std::make_unique<StandardGEMSolver>(*phaseConstraints_);
     }
 }
 
@@ -351,7 +352,7 @@ void ThermoClass::clearPhaseConstraints() {
     phaseConstraints_->clear();
 
     // Switch back to standard solver
-    solver_ = std::make_unique<StandardGEMSolver>();
+    solver_ = std::make_unique<StandardGEMSolver>(*phaseConstraints_);
 }
 
 void ThermoClass::setPhaseConstraint(int phaseIndex, bool isSolutionPhase, double targetFraction) {
@@ -721,7 +722,7 @@ void ThermoClass::setup() {
 
 int ThermoClass::solve() {
     if (!solver_) {
-        solver_ = std::make_unique<StandardGEMSolver>();
+        solver_ = std::make_unique<StandardGEMSolver>(*phaseConstraints_);
     }
     if (!newtonSolver_) {
         newtonSolver_ = std::make_unique<NewtonSolver>(*io_, phaseConstraints_);

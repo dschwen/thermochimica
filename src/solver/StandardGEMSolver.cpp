@@ -11,8 +11,8 @@
 
 namespace Thermochimica {
 
-StandardGEMSolver::StandardGEMSolver()
-    : phaseConstraints_(std::make_unique<PhaseConstraints>()) {
+StandardGEMSolver::StandardGEMSolver(PhaseConstraints& constraints)
+    : constraints_(constraints) {
 }
 
 int StandardGEMSolver::solve(ThermoState& state,
@@ -25,29 +25,26 @@ int StandardGEMSolver::solve(ThermoState& state,
     // Create temporary context for bridge to legacy solver
     ThermoContext ctx;
 
-    // Temporarily move state references into context
-    ThermoState* statePtr = &state;
-    ThermoIO* ioPtr = &io;
-    GEMState* gemPtr = &gemState;
+    // Temporarily borrow state references into context
+    // Use reset/release pattern with RAII guard for exception safety
+    ctx.thermo.reset(&state);
+    ctx.io.reset(&io);
+    ctx.gem.reset(&gemState);
+    ctx.phaseConstraints.reset(&constraints_);
 
-    ctx.thermo.reset(statePtr);
-    ctx.io.reset(ioPtr);
-    ctx.gem.reset(gemPtr);
+    // RAII guard ensures release() is called even if exception is thrown
+    struct Guard {
+        ThermoContext& ctx;
+        ~Guard() {
+            ctx.thermo.release();
+            ctx.io.release();
+            ctx.gem.release();
+            ctx.phaseConstraints.release();
+        }
+    } guard{ctx};
 
-    // Transfer PhaseConstraints ownership to context for unconstrained solve
-    // (will be transferred back after solve completes)
-    ctx.phaseConstraints.reset(phaseConstraints_.release());
-
-    // Call legacy solver
+    // Call legacy solver (exception-safe with guard)
     int result = GEMSolver::solve(ctx);
-
-    // Release pointers so they won't be deleted when ctx goes out of scope
-    ctx.thermo.release();
-    ctx.io.release();
-    ctx.gem.release();
-
-    // Transfer PhaseConstraints ownership back to StandardGEMSolver
-    phaseConstraints_.reset(ctx.phaseConstraints.release());
 
     return result;
 }
@@ -56,18 +53,21 @@ void StandardGEMSolver::initialize(ThermoState& state, GEMState& gemState) {
     // Create temporary context for bridge to legacy init
     ThermoContext ctx;
 
-    ThermoState* statePtr = &state;
-    GEMState* gemPtr = &gemState;
+    // Temporarily borrow state references
+    ctx.thermo.reset(&state);
+    ctx.gem.reset(&gemState);
 
-    ctx.thermo.reset(statePtr);
-    ctx.gem.reset(gemPtr);
+    // RAII guard ensures release() is called even if exception is thrown
+    struct Guard {
+        ThermoContext& ctx;
+        ~Guard() {
+            ctx.thermo.release();
+            ctx.gem.release();
+        }
+    } guard{ctx};
 
-    // Call legacy init
+    // Call legacy init (exception-safe with guard)
     GEMSolver::init(ctx);
-
-    // Release pointers
-    ctx.thermo.release();
-    ctx.gem.release();
 }
 
 bool StandardGEMSolver::isConverged(const ThermoState& state,
