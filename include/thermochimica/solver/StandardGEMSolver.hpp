@@ -21,9 +21,8 @@ class PhaseConstraints;
 /// Currently bridges to legacy GEMSolver implementation.
 class StandardGEMSolver : public ISolver {
 public:
-    /// @brief Constructor
-    /// @param constraints Reference to PhaseConstraints (should be empty for unconstrained solve)
-    StandardGEMSolver(PhaseConstraints& constraints);
+    /// @brief Constructor - no arguments needed for unconstrained solver
+    StandardGEMSolver();
 
     /// @brief Run solver to convergence
     /// @param state Thermodynamic state
@@ -59,9 +58,6 @@ public:
     const char* getSolverName() const override {
         return "StandardGEMSolver";
     }
-
-private:
-    PhaseConstraints& constraints_;  ///< Reference to PhaseConstraints (not owned)
 };
 
 } // namespace Thermochimica

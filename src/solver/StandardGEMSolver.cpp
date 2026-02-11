@@ -11,9 +11,7 @@
 
 namespace Thermochimica {
 
-StandardGEMSolver::StandardGEMSolver(PhaseConstraints& constraints)
-    : constraints_(constraints) {
-}
+StandardGEMSolver::StandardGEMSolver() = default;
 
 int StandardGEMSolver::solve(ThermoState& state,
                              ThermoIO& io,
@@ -30,7 +28,7 @@ int StandardGEMSolver::solve(ThermoState& state,
     ctx.thermo.reset(&state);
     ctx.io.reset(&io);
     ctx.gem.reset(&gemState);
-    ctx.phaseConstraints.reset(&constraints_);
+    // Note: ctx already has empty PhaseConstraints from its constructor
 
     // RAII guard ensures release() is called even if exception is thrown
     struct Guard {
@@ -39,7 +37,6 @@ int StandardGEMSolver::solve(ThermoState& state,
             ctx.thermo.release();
             ctx.io.release();
             ctx.gem.release();
-            ctx.phaseConstraints.release();
         }
     } guard{ctx};
 
