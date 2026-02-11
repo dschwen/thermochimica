@@ -1,0 +1,42 @@
+/// @file SUBQModel.cpp
+/// @brief Implementation of SUBQ thermodynamic model
+
+#include "thermochimica/models/SUBQModel.hpp"
+#include "thermochimica/context/ThermoState.hpp"
+#include "thermochimica/context/GEMState.hpp"
+#include "thermochimica/ThermoContext.hpp"
+
+namespace Thermochimica {
+
+// Forward declaration of legacy SUBQ function (uses same implementation as SUBG)
+void compExcessGibbsEnergySUBG(ThermoContext& ctx, int iSolnIndex);
+
+void SUBQModel::computeExcessGibbs(ThermoState& state, GEMState& gemState, int phaseIndex) {
+    // Create temporary context for bridge to legacy implementation
+    ThermoContext ctx;
+
+    // Move state references into context (non-owning)
+    ThermoState* statePtr = &state;
+    GEMState* gemPtr = &gemState;
+
+    ctx.thermo.reset(statePtr);
+    ctx.gem.reset(gemPtr);
+
+    // Call legacy SUBG implementation (SUBQ uses same function, 1-based indexing)
+    compExcessGibbsEnergySUBG(ctx, phaseIndex + 1);
+
+    // Release pointers so they won't be deleted when ctx goes out of scope
+    ctx.thermo.release();
+    ctx.gem.release();
+}
+
+bool SUBQModel::canHandle(const ThermoState& state, int phaseIndex) const {
+    if (phaseIndex < 0 || phaseIndex >= static_cast<int>(state.iSolnPhaseType.size())) {
+        return false;
+    }
+
+    Constants::PhaseType phaseType = state.iSolnPhaseType[phaseIndex];
+    return (phaseType == Constants::PhaseType::SUBQ);
+}
+
+} // namespace Thermochimica

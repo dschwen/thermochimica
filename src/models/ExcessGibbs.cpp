@@ -1,17 +1,51 @@
 #include "thermochimica/ThermoContext.hpp"
+#include "thermochimica/models/ModelFactory.hpp"
 
 namespace Thermochimica {
 
-// Forward declarations for excess Gibbs energy models
+// Forward declarations for legacy excess Gibbs energy models
 void computeExcessGibbsQKTO(ThermoContext& ctx, int phaseIndex);
 void computeExcessGibbsRKMP(ThermoContext& ctx, int phaseIndex);
 void computeExcessGibbsSUBL(ThermoContext& ctx, int phaseIndex);
 void computeExcessGibbsSUBG(ThermoContext& ctx, int phaseIndex);
 
-// Excess Gibbs energy computation dispatcher
-// Routes to appropriate model based on phase type
+// Global model factory instance (initialized on first use)
+static ModelFactory& getModelFactory() {
+    static ModelFactory factory;
+    return factory;
+}
 
+// NEW: Factory-based excess Gibbs computation using IThermodynamicModel
+// This is the preferred method going forward
+void computeExcessGibbsWithFactory(ThermoContext& ctx, int phaseIndex) {
+    auto& thermo = *ctx.thermo;
+    auto& gem = *ctx.gem;
+
+    if (phaseIndex < 0 || phaseIndex >= static_cast<int>(thermo.iSolnPhaseType.size())) {
+        return;
+    }
+
+    Constants::PhaseType phaseType = thermo.iSolnPhaseType[phaseIndex];
+
+    // Get model from factory
+    IThermodynamicModel* model = getModelFactory().getModel(phaseType);
+
+    if (model != nullptr && model->canHandle(thermo, phaseIndex)) {
+        // Use factory model
+        model->computeExcessGibbs(thermo, gem, phaseIndex);
+    } else {
+        // Fallback: unimplemented model (set excess Gibbs to zero)
+        thermo.dGibbsSolnPhase(phaseIndex) = 0.0;
+    }
+}
+
+// LEGACY: Dispatcher-based excess Gibbs computation (backward compatibility)
+// Routes to appropriate legacy model based on phase type
 void computeExcessGibbs(ThermoContext& ctx, int phaseIndex) {
+    // Use new factory-based implementation
+    computeExcessGibbsWithFactory(ctx, phaseIndex);
+
+    /* LEGACY DISPATCHER (commented out, replaced by factory)
     auto& thermo = *ctx.thermo;
 
     if (phaseIndex < 0 || phaseIndex >= static_cast<int>(thermo.iSolnPhaseType.size())) {
@@ -40,6 +74,7 @@ void computeExcessGibbs(ThermoContext& ctx, int phaseIndex) {
         // Ionic sublattice
         // computeExcessGibbsSUBI(ctx, phaseIndex);
     }
+    */
 }
 
 // Wrapper function for compatibility with Subminimization

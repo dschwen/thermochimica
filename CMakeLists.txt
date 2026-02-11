@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Options
 option(THERMO_BUILD_TESTS "Build tests" ON)
 option(THERMO_BUILD_EXAMPLES "Build examples" ON)
+option(THERMO_BUILD_TOOLS "Build validation tools" ON)
 
 # Find Eigen3 (or fetch it if not found)
 find_package(Eigen3 3.3 QUIET NO_MODULE)
@@ -60,14 +61,27 @@ set(THERMO_SOURCES
     src/models/SUBL.cpp
     src/models/SUBG.cpp
     src/models/SUBQ.cpp
+    # Model classes (OO architecture)
+    src/models/IdealMixingModel.cpp
+    src/models/QKTOModel.cpp
+    src/models/RKMPModel.cpp
+    src/models/SUBLModel.cpp
+    src/models/SUBGModel.cpp
+    src/models/SUBQModel.cpp
+    src/models/ModelFactory.cpp
 
     # Solver
     src/solver/GEMSolver.cpp
+    src/solver/StandardGEMSolver.cpp
+    src/solver/ConstrainedGEMSolver.cpp
     src/solver/GEMNewton.cpp
+    src/solver/NewtonSolver.cpp
     src/solver/GEMLineSearch.cpp
+    src/solver/WolfeLineSearch.cpp
     src/solver/LevelingSolver.cpp
     src/solver/Subminimization.cpp
     src/solver/PhaseAssemblage.cpp
+    src/solver/PhaseAssemblageManager.cpp
     src/solver/CheckConvergence.cpp
     src/solver/ConstrainedGEM.cpp
 
@@ -78,6 +92,7 @@ set(THERMO_SOURCES
 
     # API
     src/api/Thermochimica.cpp
+    src/api/ThermoClass.cpp
     src/api/CouplingAPI.cpp
 )
 
@@ -119,6 +134,11 @@ endif()
 if(THERMO_BUILD_EXAMPLES)
     add_executable(example_basic examples/basic_usage.cpp)
     target_link_libraries(example_basic PRIVATE thermochimica)
+endif()
+
+# Tools
+if(THERMO_BUILD_TOOLS)
+    add_subdirectory(tools)
 endif()
 
 # Installation

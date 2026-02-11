@@ -3,6 +3,9 @@
 
 namespace Thermochimica {
 
+// Forward declaration of internal function
+void computeHeatCapacity(ThermoContext& ctx);
+
 void postProcess(ThermoContext& ctx) {
     auto& thermo = *ctx.thermo;
     auto& io = *ctx.io;

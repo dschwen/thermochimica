@@ -4,36 +4,37 @@
 
 ---
 
-Code examples for common Thermochimica use cases.
+Code examples for common Thermochimica use cases using the modern `ThermoClass` API.
 
 ## Basic Equilibrium Calculation
 
 Calculate equilibrium for C + 2O at 1000 K:
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <iostream>
 
 int main() {
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
+
+    ThermoClass thermo;
 
     // Setup
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setThermoFilename(ctx, "data/CO.dat");
-    Thermochimica::parseCSDataFile(ctx);
+    thermo.setStandardUnits();
+    thermo.loadDatabase("data/CO.dat");
 
     // Conditions
-    Thermochimica::setTemperaturePressure(ctx, 1000.0, 1.0);
-    Thermochimica::setElementMass(ctx, 6, 1.0);   // C
-    Thermochimica::setElementMass(ctx, 8, 2.0);   // O
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(6, 1.0);   // C
+    thermo.setElementMass(8, 2.0);   // O
 
     // Calculate
-    Thermochimica::thermochimica(ctx);
+    thermo.calculate();
 
     // Results
-    if (ctx.isSuccess()) {
-        std::cout << "Gibbs Energy: " << Thermochimica::getGibbsEnergy(ctx) << " J\n";
-        Thermochimica::printResults(ctx);
+    if (thermo.isSuccess()) {
+        std::cout << "Gibbs Energy: " << thermo.getGibbsEnergy() << " J\n";
+        thermo.printResults();
     }
 
     return 0;
@@ -47,33 +48,34 @@ int main() {
 Calculate equilibrium at multiple temperatures:
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <iostream>
 #include <iomanip>
 
 int main() {
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
 
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setThermoFilename(ctx, "data/CO.dat");
-    Thermochimica::parseCSDataFile(ctx);
+    ThermoClass thermo;
+
+    thermo.setStandardUnits();
+    thermo.loadDatabase("data/CO.dat");
 
     std::cout << std::setw(10) << "T (K)" << std::setw(20) << "G (J)\n";
     std::cout << std::string(30, '-') << "\n";
 
     for (double T = 500; T <= 2000; T += 100) {
         // Reset for new calculation (keeps database loaded)
-        Thermochimica::resetThermo(ctx);
+        thermo.reset();
 
-        Thermochimica::setTemperaturePressure(ctx, T, 1.0);
-        Thermochimica::setElementMass(ctx, 6, 1.0);
-        Thermochimica::setElementMass(ctx, 8, 2.0);
+        thermo.setTemperaturePressure(T, 1.0);
+        thermo.setElementMass(6, 1.0);
+        thermo.setElementMass(8, 2.0);
 
-        Thermochimica::thermochimica(ctx);
+        thermo.calculate();
 
-        if (ctx.isSuccess()) {
+        if (thermo.isSuccess()) {
             std::cout << std::setw(10) << T
-                      << std::setw(20) << Thermochimica::getGibbsEnergy(ctx)
+                      << std::setw(20) << thermo.getGibbsEnergy()
                       << "\n";
         }
     }
@@ -89,25 +91,28 @@ int main() {
 Direct access to species mole fractions and chemical potentials:
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <iostream>
 #include <iomanip>
 
 int main() {
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
 
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setThermoFilename(ctx, "data/CO.dat");
-    Thermochimica::parseCSDataFile(ctx);
+    ThermoClass thermo;
 
-    Thermochimica::setTemperaturePressure(ctx, 1000.0, 1.0);
-    Thermochimica::setElementMass(ctx, 6, 1.0);
-    Thermochimica::setElementMass(ctx, 8, 2.0);
+    thermo.setStandardUnits();
+    thermo.loadDatabase("data/CO.dat");
 
-    Thermochimica::thermochimica(ctx);
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 2.0);
 
-    if (ctx.isSuccess()) {
-        auto& thermo = *ctx.thermo;
+    thermo.calculate();
+
+    if (thermo.isSuccess()) {
+        // Access internal state via context
+        ThermoContext& ctx = thermo.getContext();
+        auto& state = *ctx.thermo;
 
         std::cout << "Species results:\n";
         std::cout << std::setw(15) << "Species"
@@ -116,20 +121,20 @@ int main() {
                   << std::setw(15) << "mu/RT\n";
         std::cout << std::string(60, '-') << "\n";
 
-        for (int i = 0; i < thermo.nSpecies; ++i) {
-            if (thermo.dMolFraction(i) > 1e-10) {
-                std::cout << std::setw(15) << thermo.cSpeciesName[i]
-                          << std::setw(15) << thermo.dMolFraction(i)
-                          << std::setw(15) << thermo.dMolesSpecies(i)
-                          << std::setw(15) << thermo.dChemicalPotential(i)
+        for (int i = 0; i < state.nSpecies; ++i) {
+            if (state.dMolFraction(i) > 1e-10) {
+                std::cout << std::setw(15) << state.cSpeciesName[i]
+                          << std::setw(15) << state.dMolFraction(i)
+                          << std::setw(15) << state.dMolesSpecies(i)
+                          << std::setw(15) << state.dChemicalPotential(i)
                           << "\n";
             }
         }
 
         std::cout << "\nElement potentials:\n";
-        for (int j = 0; j < thermo.nElements; ++j) {
-            std::cout << "  " << thermo.cElementName[j] << ": "
-                      << thermo.dElementPotential(j) << "\n";
+        for (int j = 0; j < state.nElements; ++j) {
+            std::cout << "  " << state.cElementName[j] << ": "
+                      << state.dElementPotential(j) << "\n";
         }
     }
 
@@ -144,42 +149,43 @@ int main() {
 Use previous results as initial guess for faster convergence:
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <iostream>
 
 int main() {
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
 
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setThermoFilename(ctx, "data/NobleMetals-Kaye.dat");
-    Thermochimica::parseCSDataFile(ctx);
+    ThermoClass thermo;
+
+    thermo.setStandardUnits();
+    thermo.loadDatabase("data/NobleMetals-Kaye.dat");
 
     // First calculation
-    Thermochimica::setTemperaturePressure(ctx, 1500.0, 1.0);
-    Thermochimica::setElementMass(ctx, 42, 0.5);  // Mo
-    Thermochimica::setElementMass(ctx, 44, 0.5);  // Ru
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(44, 0.5);  // Ru
 
-    Thermochimica::thermochimica(ctx);
+    thermo.calculate();
 
-    if (ctx.isSuccess()) {
-        std::cout << "T=1500 K: G = " << Thermochimica::getGibbsEnergy(ctx) << " J\n";
+    if (thermo.isSuccess()) {
+        std::cout << "T=1500 K: G = " << thermo.getGibbsEnergy() << " J\n";
 
         // Save state for reinitialization
-        Thermochimica::saveReinitData(ctx);
+        thermo.saveReinitData();
     }
 
     // Second calculation at nearby temperature (faster)
-    Thermochimica::resetThermo(ctx);
-    Thermochimica::setTemperaturePressure(ctx, 1510.0, 1.0);
-    Thermochimica::setElementMass(ctx, 42, 0.5);
-    Thermochimica::setElementMass(ctx, 44, 0.5);
+    thermo.reset();
+    thermo.setTemperaturePressure(1510.0, 1.0);
+    thermo.setElementMass(42, 0.5);
+    thermo.setElementMass(44, 0.5);
 
     // Request reinitialization from saved data
-    Thermochimica::setReinitRequested(ctx, true);
-    Thermochimica::thermochimica(ctx);
+    thermo.setReinitRequested(true);
+    thermo.calculate();
 
-    if (ctx.isSuccess()) {
-        std::cout << "T=1510 K: G = " << Thermochimica::getGibbsEnergy(ctx) << " J\n";
+    if (thermo.isSuccess()) {
+        std::cout << "T=1510 K: G = " << thermo.getGibbsEnergy() << " J\n";
     }
 
     return 0;
@@ -190,10 +196,10 @@ int main() {
 
 ## Thread-Safe Parallel Calculations
 
-Each ThermoContext is independent, enabling safe parallel execution:
+Each ThermoClass instance is independent, enabling safe parallel execution:
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <iostream>
 #include <thread>
 #include <vector>
@@ -202,23 +208,24 @@ Each ThermoContext is independent, enabling safe parallel execution:
 std::mutex outputMutex;
 
 void calculateAtTemperature(double T, const std::string& dataFile) {
-    // Each thread has its own context
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
 
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setThermoFilename(ctx, dataFile);
-    Thermochimica::parseCSDataFile(ctx);
+    // Each thread has its own instance
+    ThermoClass thermo;
 
-    Thermochimica::setTemperaturePressure(ctx, T, 1.0);
-    Thermochimica::setElementMass(ctx, 6, 1.0);
-    Thermochimica::setElementMass(ctx, 8, 2.0);
+    thermo.setStandardUnits();
+    thermo.loadDatabase(dataFile);
 
-    Thermochimica::thermochimica(ctx);
+    thermo.setTemperaturePressure(T, 1.0);
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 2.0);
 
-    if (ctx.isSuccess()) {
+    thermo.calculate();
+
+    if (thermo.isSuccess()) {
         std::lock_guard<std::mutex> lock(outputMutex);
         std::cout << "T=" << T << " K: G = "
-                  << Thermochimica::getGibbsEnergy(ctx) << " J\n";
+                  << thermo.getGibbsEnergy() << " J\n";
     }
 }
 
@@ -246,32 +253,33 @@ int main() {
 Calculate thermodynamic properties:
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <iostream>
 #include <iomanip>
 
 int main() {
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
 
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setThermoFilename(ctx, "data/CO.dat");
-    Thermochimica::parseCSDataFile(ctx);
+    ThermoClass thermo;
+
+    thermo.setStandardUnits();
+    thermo.loadDatabase("data/CO.dat");
 
     // Enable property calculation
-    Thermochimica::setHeatCapacityEntropyEnthalpy(ctx, true);
+    thermo.setHeatCapacityEntropyEnthalpy(true);
 
-    Thermochimica::setTemperaturePressure(ctx, 1000.0, 1.0);
-    Thermochimica::setElementMass(ctx, 6, 1.0);
-    Thermochimica::setElementMass(ctx, 8, 2.0);
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 2.0);
 
-    Thermochimica::thermochimica(ctx);
+    thermo.calculate();
 
-    if (ctx.isSuccess()) {
+    if (thermo.isSuccess()) {
         std::cout << std::fixed << std::setprecision(2);
-        std::cout << "Gibbs Energy:  " << Thermochimica::getGibbsEnergy(ctx) << " J\n";
-        std::cout << "Heat Capacity: " << Thermochimica::getHeatCapacity(ctx) << " J/(mol K)\n";
-        std::cout << "Entropy:       " << Thermochimica::getEntropy(ctx) << " J/(mol K)\n";
-        std::cout << "Enthalpy:      " << Thermochimica::getEnthalpy(ctx) << " J/mol\n";
+        std::cout << "Gibbs Energy:  " << thermo.getGibbsEnergy() << " J\n";
+        std::cout << "Heat Capacity: " << thermo.getHeatCapacity() << " J/(mol K)\n";
+        std::cout << "Entropy:       " << thermo.getEntropy() << " J/(mol K)\n";
+        std::cout << "Enthalpy:      " << thermo.getEnthalpy() << " J/mol\n";
     }
 
     return 0;
@@ -285,32 +293,36 @@ int main() {
 Adjust solver tolerances for specific needs:
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <thermochimica/util/Tolerances.hpp>
 #include <iostream>
 
 int main() {
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
 
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setThermoFilename(ctx, "data/CO.dat");
-    Thermochimica::parseCSDataFile(ctx);
+    ThermoClass thermo;
+
+    thermo.setStandardUnits();
+    thermo.loadDatabase("data/CO.dat");
+
+    // Access context for tolerance adjustment
+    ThermoContext& ctx = thermo.getContext();
 
     // Tighten convergence for high precision
-    ctx.thermo->tolerances[Thermochimica::kTolConvergence] = 1e-10;
-    ctx.thermo->tolerances[Thermochimica::kTolMassBalance] = 1e-8;
-    ctx.thermo->tolerances[Thermochimica::kTolChemPotential] = 1e-10;
+    ctx.thermo->tolerances[kTolConvergence] = 1e-10;
+    ctx.thermo->tolerances[kTolMassBalance] = 1e-8;
+    ctx.thermo->tolerances[kTolChemPotential] = 1e-10;
 
-    Thermochimica::setTemperaturePressure(ctx, 1000.0, 1.0);
-    Thermochimica::setElementMass(ctx, 6, 1.0);
-    Thermochimica::setElementMass(ctx, 8, 2.0);
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 2.0);
 
-    Thermochimica::thermochimica(ctx);
+    thermo.calculate();
 
-    if (ctx.isSuccess()) {
+    if (thermo.isSuccess()) {
         std::cout << "Converged with tight tolerances\n";
         std::cout << "Gibbs Energy: " << std::setprecision(12)
-                  << Thermochimica::getGibbsEnergy(ctx) << " J\n";
+                  << thermo.getGibbsEnergy() << " J\n";
     }
 
     return 0;
@@ -324,31 +336,32 @@ int main() {
 Work with Celsius and bar instead of Kelvin and atm:
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <iostream>
 
 int main() {
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
+
+    ThermoClass thermo;
 
     // Set custom units
-    Thermochimica::setUnitTemperature(ctx, "C");
-    Thermochimica::setUnitPressure(ctx, "bar");
-    Thermochimica::setUnitMass(ctx, "grams");
+    thermo.setUnitTemperature("C");
+    thermo.setUnitPressure("bar");
+    thermo.setUnitMass("grams");
 
-    Thermochimica::setThermoFilename(ctx, "data/CO.dat");
-    Thermochimica::parseCSDataFile(ctx);
+    thermo.loadDatabase("data/CO.dat");
 
     // Now use Celsius and bar
-    Thermochimica::setTemperaturePressure(ctx, 726.85, 1.01325);  // ~1000 K, ~1 atm
+    thermo.setTemperaturePressure(726.85, 1.01325);  // ~1000 K, ~1 atm
 
     // Mass in grams
-    Thermochimica::setElementMass(ctx, 6, 12.011);   // 12.011 g C = 1 mol
-    Thermochimica::setElementMass(ctx, 8, 32.0);     // 32.0 g O = 2 mol
+    thermo.setElementMass(6, 12.011);   // 12.011 g C = 1 mol
+    thermo.setElementMass(8, 32.0);     // 32.0 g O = 2 mol
 
-    Thermochimica::thermochimica(ctx);
+    thermo.calculate();
 
-    if (ctx.isSuccess()) {
-        std::cout << "Gibbs Energy: " << Thermochimica::getGibbsEnergy(ctx) << " J\n";
+    if (thermo.isSuccess()) {
+        std::cout << "Gibbs Energy: " << thermo.getGibbsEnergy() << " J\n";
     }
 
     return 0;
@@ -362,42 +375,43 @@ int main() {
 Get detailed information about equilibrium phases:
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <iostream>
 #include <iomanip>
 
 int main() {
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
 
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setThermoFilename(ctx, "data/NobleMetals-Kaye.dat");
-    Thermochimica::parseCSDataFile(ctx);
+    ThermoClass thermo;
 
-    Thermochimica::setTemperaturePressure(ctx, 1800.0, 1.0);
-    Thermochimica::setElementMass(ctx, 42, 0.33);  // Mo
-    Thermochimica::setElementMass(ctx, 44, 0.33);  // Ru
-    Thermochimica::setElementMass(ctx, 46, 0.34);  // Pd
+    thermo.setStandardUnits();
+    thermo.loadDatabase("data/NobleMetals-Kaye.dat");
 
-    Thermochimica::thermochimica(ctx);
+    thermo.setTemperaturePressure(1800.0, 1.0);
+    thermo.setElementMass(42, 0.33);  // Mo
+    thermo.setElementMass(44, 0.33);  // Ru
+    thermo.setElementMass(46, 0.34);  // Pd
 
-    if (ctx.isSuccess()) {
-        auto [nSoln, nCond] = Thermochimica::getNumberPhasesSystem(ctx);
+    thermo.calculate();
+
+    if (thermo.isSuccess()) {
+        auto [nSoln, nCond] = thermo.getNumberPhasesSystem();
 
         std::cout << "Equilibrium phases:\n\n";
 
         // Check each phase
         for (int i = 0; i < nSoln; ++i) {
-            std::string phaseName = Thermochimica::getPhaseNameAtIndex(ctx, i);
-            auto [moles, info] = Thermochimica::getMolesPhase(ctx, phaseName);
+            std::string phaseName = thermo.getPhaseNameAtIndex(i);
+            auto [moles, info] = thermo.getMolesPhase(phaseName);
 
             if (info == 0 && moles > 1e-10) {
                 std::cout << phaseName << ": " << moles << " mol\n";
 
                 // Get species in this phase
-                for (int j = 0; j < Thermochimica::getNumberSpeciesSystem(ctx); ++j) {
-                    std::string specName = Thermochimica::getSpeciesAtIndex(ctx, j);
+                for (int j = 0; j < thermo.getNumberSpeciesSystem(); ++j) {
+                    std::string specName = thermo.getSpeciesAtIndex(j);
                     auto [molFrac, chemPot, sinfo] =
-                        Thermochimica::getOutputSolnSpecies(ctx, phaseName, specName);
+                        thermo.getOutputSolnSpecies(phaseName, specName);
 
                     if (sinfo == 0 && molFrac > 1e-6) {
                         std::cout << "  " << specName << ": x = " << molFrac << "\n";
@@ -431,46 +445,47 @@ This is designed for phase field coupling where the mesoscale simulation imposes
 ### Two-Phase Constraint Example
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <iostream>
 
 int main() {
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
 
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setThermoFilename(ctx, "data/NobleMetals-Kaye.dat");
-    Thermochimica::parseCSDataFile(ctx);
+    ThermoClass thermo;
+
+    thermo.setStandardUnits();
+    thermo.loadDatabase("data/NobleMetals-Kaye.dat");
 
     // Set conditions
-    Thermochimica::setTemperaturePressure(ctx, 1500.0, 1.0);
-    Thermochimica::setElementMass(ctx, 42, 0.5);  // Mo
-    Thermochimica::setElementMass(ctx, 44, 0.5);  // Ru
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(44, 0.5);  // Ru
 
     // Constrain TWO phases with fractions summing to 1.0
     // This is required: all element mass must go into constrained phases
-    Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);
-    Thermochimica::setSolnPhaseConstraint(ctx, "BCCN", 0.6);
+    thermo.setSolnPhaseConstraint("FCCN", 0.4);
+    thermo.setSolnPhaseConstraint("BCCN", 0.6);
 
     // Optionally adjust solver parameters
-    Thermochimica::setConstraintTolerance(ctx, 1e-4);
-    Thermochimica::setConstraintMaxOuterIterations(ctx, 30);
+    thermo.setConstraintTolerance(1e-4);
+    thermo.setConstraintMaxOuterIterations(30);
 
-    Thermochimica::thermochimica(ctx);
+    thermo.calculate();
 
-    if (ctx.isSuccess()) {
-        auto [fcc_frac, fcc_info] = Thermochimica::getPhaseElementFraction(ctx, "FCCN");
-        auto [bcc_frac, bcc_info] = Thermochimica::getPhaseElementFraction(ctx, "BCCN");
+    if (thermo.isSuccess()) {
+        auto [fcc_frac, fcc_info] = thermo.getPhaseElementFraction("FCCN");
+        auto [bcc_frac, bcc_info] = thermo.getPhaseElementFraction("BCCN");
         std::cout << "FCCN fraction: " << fcc_frac << "\n";  // ~0.4
         std::cout << "BCCN fraction: " << bcc_frac << "\n";  // ~0.6
 
         // Check constraint satisfaction
-        if (Thermochimica::arePhaseConstraintsSatisfied(ctx)) {
+        if (thermo.arePhaseConstraintsSatisfied()) {
             std::cout << "All phase constraints satisfied.\n";
         }
     }
 
     // Clean up constraints for next calculation
-    Thermochimica::clearPhaseConstraints(ctx);
+    thermo.clearPhaseConstraints();
 
     return 0;
 }
@@ -481,24 +496,122 @@ int main() {
 **Constraints must account for all mass:**
 ```cpp
 // CORRECT: fractions sum to 1.0
-Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);
-Thermochimica::setSolnPhaseConstraint(ctx, "BCCN", 0.6);
+thermo.setSolnPhaseConstraint("FCCN", 0.4);
+thermo.setSolnPhaseConstraint("BCCN", 0.6);
 
 // INCORRECT: single constraint without accounting for remaining mass
 // The phase will end up at 1.0 (100%) since it's the only phase present
-Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);  // Will actually be 1.0!
+thermo.setSolnPhaseConstraint("FCCN", 0.4);  // Will actually be 1.0!
 ```
 
 **Managing constraints:**
 ```cpp
 // Remove a single constraint
-Thermochimica::removePhaseConstraint(ctx, "BCCN");
+thermo.removePhaseConstraint("BCCN");
 
 // Clear all constraints (returns to unconstrained equilibrium mode)
-Thermochimica::clearPhaseConstraints(ctx);
+thermo.clearPhaseConstraints();
 ```
 
 **Phase fraction definition:** Phase fraction is defined at the element level as `(sum of element moles in phase) / (total element moles in system)`. This differs from mole fraction, making it suitable for phase field applications where you track the spatial distribution of phases.
+
+---
+
+## Custom Solvers (Advanced)
+
+Use the strategy pattern to inject custom solver implementations:
+
+```cpp
+#include <thermochimica/ThermoClass.hpp>
+#include <thermochimica/interfaces/ISolver.hpp>
+#include <iostream>
+
+// Custom solver implementation
+class MyCustomSolver : public ISolver {
+public:
+    int solve(ThermoState& state, ThermoIO& io, GEMState& gemState,
+             PhaseAssemblageManager& phaseManager, INewtonSolver& newton,
+             ILineSearch& lineSearch,
+             const std::vector<IThermodynamicModel*>& models) override {
+        // Custom solver logic here...
+        std::cout << "Using custom solver!\n";
+        // For this example, just return success
+        return 0;
+    }
+
+    void initialize(ThermoState& state, GEMState& gemState) override {
+        std::cout << "Custom solver initialization\n";
+    }
+
+    bool isConverged(const ThermoState& state,
+                    const GEMState& gemState) const override {
+        return gemState.lConverged;
+    }
+
+    const char* getSolverName() const override {
+        return "MyCustomSolver";
+    }
+};
+
+int main() {
+    using namespace Thermochimica;
+
+    ThermoClass thermo;
+
+    thermo.loadDatabase("data/CO.dat");
+    thermo.setStandardUnits();
+
+    // Inject custom solver
+    thermo.setSolver(std::make_unique<MyCustomSolver>());
+
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 2.0);
+
+    thermo.calculate();  // Uses custom solver
+
+    return 0;
+}
+```
+
+---
+
+## Move Semantics (Modern C++)
+
+Efficient resource management with move semantics:
+
+```cpp
+#include <thermochimica/ThermoClass.hpp>
+#include <iostream>
+#include <vector>
+
+using namespace Thermochimica;
+
+// Factory function returning ThermoClass by value (efficient move)
+ThermoClass createConfiguredThermo(const std::string& database) {
+    ThermoClass thermo;
+    thermo.loadDatabase(database);
+    thermo.setStandardUnits();
+    return thermo;  // Efficient move, not copy
+}
+
+int main() {
+    // Move construction
+    ThermoClass thermo = createConfiguredThermo("data/CO.dat");
+
+    // Use configured instance
+    thermo.setTemperaturePressure(1000.0, 1.0);
+    thermo.setElementMass(6, 1.0);
+    thermo.setElementMass(8, 2.0);
+    thermo.calculate();
+
+    // Store in containers (also uses move)
+    std::vector<ThermoClass> thermos;
+    thermos.push_back(std::move(thermo));  // Move into vector
+
+    return 0;
+}
+```
 
 ---
 

@@ -4,24 +4,38 @@
 
 ---
 
-Complete reference for all public Thermochimica functions.
+Complete reference for the modern `ThermoClass` API.
 
-All functions are in the `Thermochimica` namespace.
+All classes and functions are in the `Thermochimica` namespace.
+
+**Note:** For migrating from the old free-function API, see [Migration Guide](MIGRATION_FROM_FREE_FUNCTIONS.md).
+
+## ThermoClass Overview
+
+The `ThermoClass` is the modern, canonical API for Thermochimica. All calculations are performed through member functions of this class.
+
+```cpp
+#include <thermochimica/ThermoClass.hpp>
+
+Thermochimica::ThermoClass thermo;
+```
 
 ## Main Solver Functions
 
-### thermochimica
+### calculate
 
 ```cpp
-void thermochimica(ThermoContext& ctx);
+int calculate();
 ```
 
 Main entry point. Performs complete equilibrium calculation including initialization, solving, and post-processing.
 
+**Returns:** Error code (0 = success)
+
 **Example:**
 ```cpp
-Thermochimica::thermochimica(ctx);
-if (ctx.isSuccess()) {
+thermo.calculate();
+if (thermo.isSuccess()) {
     // Calculation succeeded
 }
 ```
@@ -31,83 +45,87 @@ if (ctx.isSuccess()) {
 For fine-grained control, the calculation can be broken into steps:
 
 ```cpp
-void init(ThermoContext& ctx);           // Initialize solver
-void checkSystem(ThermoContext& ctx);    // Validate inputs
-void compThermoData(ThermoContext& ctx); // Compute Gibbs energies
-void setup(ThermoContext& ctx);          // Setup phase assemblage
-void solve(ThermoContext& ctx);          // Run GEM solver
-void postProcess(ThermoContext& ctx);    // Compute output quantities
+void initialize();       // Initialize solver
+void checkSystem();      // Validate inputs
+void computeThermoData();  // Compute Gibbs energies
+void setup();            // Setup phase assemblage
+int solve();             // Run GEM solver
 ```
 
 ---
 
-## Parser Functions
+## Database Loading
 
-### parseCSDataFile
+### loadDatabase
 
 ```cpp
-void parseCSDataFile(ThermoContext& ctx, const std::string& filename);
-void parseCSDataFile(ThermoContext& ctx);  // Uses filename from context
+int loadDatabase(const std::string& filename);
 ```
 
-Parse a ChemSage format database file (`.dat`).
+Load and parse a ChemSage format database file (`.dat`). Combines `setThermoFilename()` and `parseCSDataFile()`.
+
+**Returns:** Error code (0 = success)
 
 **Example:**
 ```cpp
-Thermochimica::setThermoFilename(ctx, "CO.dat");
-Thermochimica::parseCSDataFile(ctx);
-
-// Or directly:
-Thermochimica::parseCSDataFile(ctx, "CO.dat");
+int result = thermo.loadDatabase("CO.dat");
+if (result != 0) {
+    std::cerr << "Failed: " << thermo.getErrorMessage() << "\n";
+}
 ```
+
+### Individual Steps
+
+```cpp
+void setThermoFilename(const std::string& filename);
+int parseCSDataFile();
+```
+
+For cases where you need separate control over filename setting and parsing.
 
 ---
 
-## Input Setting Functions
+## Input Configuration
 
 ### Temperature and Pressure
 
 ```cpp
-void setTemperaturePressure(ThermoContext& ctx, double temperature, double pressure);
-void setTemperature(ThermoContext& ctx, double temperature);
-void setPressure(ThermoContext& ctx, double pressure);
+void setTemperaturePressure(double temperature, double pressure);
+void setTemperature(double temperature);
+void setPressure(double pressure);
 ```
 
 Set thermodynamic conditions. Values are interpreted in the current unit system.
 
 **Example:**
 ```cpp
-Thermochimica::setTemperaturePressure(ctx, 1000.0, 1.0);  // 1000 K, 1 atm
+thermo.setTemperaturePressure(1000.0, 1.0);  // 1000 K, 1 atm
 ```
 
 ### Composition
 
 ```cpp
-void setElementMass(ThermoContext& ctx, int atomicNumber, double mass);
-void setElementMass(ThermoContext& ctx, const std::string& elementName, double mass);
+void setElementMass(int atomicNumber, double mass);
+void setElementMass(const std::string& elementName, double mass);
 ```
 
 Set element amounts by atomic number (1-118) or element symbol.
 
 **Example:**
 ```cpp
-Thermochimica::setElementMass(ctx, 6, 1.0);     // 1 mol Carbon
-Thermochimica::setElementMass(ctx, "O", 2.0);   // 2 mol Oxygen
-Thermochimica::setElementMass(ctx, 26, 0.5);    // 0.5 mol Iron
+thermo.setElementMass(6, 1.0);     // 1 mol Carbon
+thermo.setElementMass("O", 2.0);   // 2 mol Oxygen
+thermo.setElementMass(26, 0.5);    // 0.5 mol Iron
 ```
 
 ### Units
 
 ```cpp
-void setUnits(ThermoContext& ctx,
-              const std::string& tempUnit,
-              const std::string& pressUnit,
-              const std::string& massUnit);
-
-void setUnitTemperature(ThermoContext& ctx, const std::string& unit);
-void setUnitPressure(ThermoContext& ctx, const std::string& unit);
-void setUnitMass(ThermoContext& ctx, const std::string& unit);
-void setStandardUnits(ThermoContext& ctx);
+void setStandardUnits();
+void setUnitsSI();
+void setUnitTemperature(const std::string& unit);
+void setUnitPressure(const std::string& unit);
+void setUnitMass(const std::string& unit);
 ```
 
 **Temperature units:** `"K"`, `"C"`, `"F"`, `"R"` (Rankine)
@@ -118,28 +136,22 @@ void setStandardUnits(ThermoContext& ctx);
 
 **Example:**
 ```cpp
-Thermochimica::setStandardUnits(ctx);  // K, atm, moles
+thermo.setStandardUnits();  // K, atm, moles
 
 // Or explicitly:
-Thermochimica::setUnits(ctx, "C", "bar", "grams");
+thermo.setUnitTemperature("C");
+thermo.setUnitPressure("bar");
+thermo.setUnitMass("grams");
 ```
-
-### Filename
-
-```cpp
-void setThermoFilename(ThermoContext& ctx, const std::string& filename);
-```
-
-Set the database filename before parsing.
 
 ### Options
 
 ```cpp
-void setFuzzyStoich(ThermoContext& ctx, bool enable);
-void setFuzzyMagnitude(ThermoContext& ctx, double magnitude);
-void setPrintResultsMode(ThermoContext& ctx, int mode);
-void setWriteJSON(ThermoContext& ctx, bool enable);
-void setHeatCapacityEntropyEnthalpy(ThermoContext& ctx, bool enable);
+void setFuzzyStoich(bool enable);
+void setFuzzyMagnitude(double magnitude);
+void setPrintResultsMode(int mode);
+void setWriteJSON(bool enable);
+void setHeatCapacityEntropyEnthalpy(bool enable);
 ```
 
 | Function | Description |
@@ -172,18 +184,8 @@ This approach differs from the classical unconstrained equilibrium calculation w
 ### Setting Constraints
 
 ```cpp
-void setSolnPhaseConstraint(ThermoContext& ctx,
-                            const std::string& phaseName,
-                            double targetFraction);
-
-void setCondPhaseConstraint(ThermoContext& ctx,
-                            const std::string& speciesName,
-                            double targetFraction);
-
-void setPhaseConstraint(ThermoContext& ctx,
-                        int phaseIndex,
-                        bool isSolutionPhase,
-                        double targetFraction);
+void setSolnPhaseConstraint(const std::string& phaseName, double targetFraction);
+void setCondPhaseConstraint(const std::string& speciesName, double targetFraction);
 ```
 
 Set a phase fraction constraint. Target fraction must be in range [0, 1].
@@ -191,45 +193,40 @@ Set a phase fraction constraint. Target fraction must be in range [0, 1].
 **Example:**
 ```cpp
 // Constrain FCCN phase to 40% element fraction
-Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);
+thermo.setSolnPhaseConstraint("FCCN", 0.4);
 
 // Constrain a pure condensed phase
-Thermochimica::setCondPhaseConstraint(ctx, "Graphite", 0.1);
-
-// By index (solution phase)
-Thermochimica::setPhaseConstraint(ctx, 1, true, 0.5);
+thermo.setCondPhaseConstraint("Graphite", 0.1);
 ```
 
 ### Removing Constraints
 
 ```cpp
-void removePhaseConstraint(ThermoContext& ctx, const std::string& phaseName);
-void clearPhaseConstraints(ThermoContext& ctx);
+void removePhaseConstraint(const std::string& phaseName);
+void clearPhaseConstraints();
 ```
 
 **Example:**
 ```cpp
-Thermochimica::removePhaseConstraint(ctx, "FCCN");  // Remove single constraint
-Thermochimica::clearPhaseConstraints(ctx);          // Remove all constraints
+thermo.removePhaseConstraint("FCCN");  // Remove single constraint
+thermo.clearPhaseConstraints();         // Remove all constraints
 ```
 
 ### Querying Phase Fractions
 
 ```cpp
-std::pair<double, int> getPhaseElementFraction(const ThermoContext& ctx,
-                                               const std::string& phaseName);
-
-bool arePhaseConstraintsSatisfied(const ThermoContext& ctx);
+std::pair<double, int> getPhaseElementFraction(const std::string& phaseName) const;
+bool arePhaseConstraintsSatisfied() const;
 ```
 
 **Example:**
 ```cpp
-auto [fraction, info] = Thermochimica::getPhaseElementFraction(ctx, "FCCN");
+auto [fraction, info] = thermo.getPhaseElementFraction("FCCN");
 if (info == 0) {
     std::cout << "FCCN element fraction: " << fraction << "\n";
 }
 
-if (Thermochimica::arePhaseConstraintsSatisfied(ctx)) {
+if (thermo.arePhaseConstraintsSatisfied()) {
     std::cout << "All constraints satisfied\n";
 }
 ```
@@ -237,9 +234,9 @@ if (Thermochimica::arePhaseConstraintsSatisfied(ctx)) {
 ### Solver Parameters
 
 ```cpp
-void setConstraintTolerance(ThermoContext& ctx, double tolerance);
-void setConstraintPenaltyParameter(ThermoContext& ctx, double rho);
-void setConstraintMaxOuterIterations(ThermoContext& ctx, int maxIter);
+void setConstraintTolerance(double tolerance);
+void setConstraintPenaltyParameter(double rho);
+void setConstraintMaxOuterIterations(int maxIter);
 ```
 
 | Function | Default | Description |
@@ -250,39 +247,40 @@ void setConstraintMaxOuterIterations(ThermoContext& ctx, int maxIter);
 
 **Example:**
 ```cpp
-Thermochimica::setConstraintTolerance(ctx, 1e-5);
-Thermochimica::setConstraintMaxOuterIterations(ctx, 50);
+thermo.setConstraintTolerance(1e-5);
+thermo.setConstraintMaxOuterIterations(50);
 ```
 
 ### Complete Example
 
 ```cpp
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 
 int main() {
-    Thermochimica::ThermoContext ctx;
+    using namespace Thermochimica;
+
+    ThermoClass thermo;
 
     // Load database
-    Thermochimica::setStandardUnits(ctx);
-    Thermochimica::setThermoFilename(ctx, "NobleMetals-Kaye.dat");
-    Thermochimica::parseCSDataFile(ctx);
+    thermo.setStandardUnits();
+    thermo.loadDatabase("NobleMetals-Kaye.dat");
 
     // Set conditions
-    Thermochimica::setTemperaturePressure(ctx, 1500.0, 1.0);
-    Thermochimica::setElementMass(ctx, 42, 0.5);  // Mo
-    Thermochimica::setElementMass(ctx, 44, 0.5);  // Ru
+    thermo.setTemperaturePressure(1500.0, 1.0);
+    thermo.setElementMass(42, 0.5);  // Mo
+    thermo.setElementMass(44, 0.5);  // Ru
 
     // Constrain two phases with fractions summing to 1.0
     // (Required: all element mass must be accounted for)
-    Thermochimica::setSolnPhaseConstraint(ctx, "FCCN", 0.4);
-    Thermochimica::setSolnPhaseConstraint(ctx, "BCCN", 0.6);
+    thermo.setSolnPhaseConstraint("FCCN", 0.4);
+    thermo.setSolnPhaseConstraint("BCCN", 0.6);
 
     // Run constrained equilibrium
-    Thermochimica::thermochimica(ctx);
+    thermo.calculate();
 
-    if (ctx.isSuccess()) {
-        auto [fcc_frac, fcc_info] = Thermochimica::getPhaseElementFraction(ctx, "FCCN");
-        auto [bcc_frac, bcc_info] = Thermochimica::getPhaseElementFraction(ctx, "BCCN");
+    if (thermo.isSuccess()) {
+        auto [fcc_frac, fcc_info] = thermo.getPhaseElementFraction("FCCN");
+        auto [bcc_frac, bcc_info] = thermo.getPhaseElementFraction("BCCN");
         std::cout << "FCCN fraction: " << fcc_frac << std::endl;  // ~0.4
         std::cout << "BCCN fraction: " << bcc_frac << std::endl;  // ~0.6
     }
@@ -298,35 +296,32 @@ int main() {
 ### System Properties
 
 ```cpp
-double getGibbsEnergy(const ThermoContext& ctx);
-double getHeatCapacity(const ThermoContext& ctx);
-double getEntropy(const ThermoContext& ctx);
-double getEnthalpy(const ThermoContext& ctx);
+double getGibbsEnergy() const;
+double getHeatCapacity() const;
+double getEntropy() const;
+double getEnthalpy() const;
 ```
 
 Returns system Gibbs energy (J), heat capacity (J/mol/K), entropy (J/mol/K), and enthalpy (J/mol).
 
-**Note:** Heat capacity, entropy, and enthalpy require `setHeatCapacityEntropyEnthalpy(ctx, true)` before calculation.
+**Note:** Heat capacity, entropy, and enthalpy require `setHeatCapacityEntropyEnthalpy(true)` before calculation.
 
 ### Phase Information
 
 ```cpp
-std::pair<double, int> getMolesPhase(const ThermoContext& ctx,
-                                     const std::string& phaseName);
-std::pair<double, int> getSolnPhaseMol(const ThermoContext& ctx,
-                                       const std::string& phaseName);
-std::pair<double, int> getPureConPhaseMol(const ThermoContext& ctx,
-                                          const std::string& phaseName);
-int getPhaseIndex(const ThermoContext& ctx, const std::string& phaseName);
-bool isPhaseGas(const ThermoContext& ctx, const std::string& phaseName);
-bool isPhaseMQM(const ThermoContext& ctx, const std::string& phaseName);
+std::pair<double, int> getMolesPhase(const std::string& phaseName) const;
+std::pair<double, int> getSolnPhaseMol(const std::string& phaseName) const;
+std::pair<double, int> getPureConPhaseMol(const std::string& phaseName) const;
+int getPhaseIndex(const std::string& phaseName) const;
+bool isPhaseGas(const std::string& phaseName) const;
+bool isPhaseMQM(const std::string& phaseName) const;
 ```
 
 **Return format:** `std::pair<value, info>` where `info=0` indicates success.
 
 **Example:**
 ```cpp
-auto [moles, info] = Thermochimica::getMolesPhase(ctx, "gas_ideal");
+auto [moles, info] = thermo.getMolesPhase("gas_ideal");
 if (info == 0) {
     std::cout << "Gas phase: " << moles << " mol\n";
 }
@@ -336,14 +331,12 @@ if (info == 0) {
 
 ```cpp
 std::tuple<double, double, int> getOutputSolnSpecies(
-    const ThermoContext& ctx,
     const std::string& phaseName,
-    const std::string& speciesName);
+    const std::string& speciesName) const;
 
 std::tuple<double, double, int> getOutputMolSpecies(
-    const ThermoContext& ctx,
     const std::string& phaseName,
-    const std::string& speciesName);
+    const std::string& speciesName) const;
 ```
 
 | Function | Returns |
@@ -353,14 +346,13 @@ std::tuple<double, double, int> getOutputMolSpecies(
 
 **Example:**
 ```cpp
-auto [moleFrac, chemPot, info] = Thermochimica::getOutputSolnSpecies(ctx, "gas_ideal", "CO2");
+auto [moleFrac, chemPot, info] = thermo.getOutputSolnSpecies("gas_ideal", "CO2");
 ```
 
 ### Chemical Potentials
 
 ```cpp
-std::pair<double, int> getOutputChemPot(const ThermoContext& ctx,
-                                        const std::string& elementName);
+std::pair<double, int> getOutputChemPot(const std::string& elementName) const;
 ```
 
 Get chemical potential of an element.
@@ -369,19 +361,17 @@ Get chemical potential of an element.
 
 ```cpp
 std::pair<double, int> getElementMolesInPhase(
-    const ThermoContext& ctx,
     const std::string& elementName,
-    const std::string& phaseName);
+    const std::string& phaseName) const;
 ```
 
 ### Site Fractions (Sublattice Phases)
 
 ```cpp
 std::pair<double, int> getOutputSiteFraction(
-    const ThermoContext& ctx,
     const std::string& phaseName,
     int sublattice,
-    const std::string& constituentName);
+    const std::string& constituentName) const;
 ```
 
 For SUBL/SUBG/SUBI phase types with sublattice models.
@@ -391,26 +381,26 @@ For SUBL/SUBG/SUBI phase types with sublattice models.
 ## Database Query Functions
 
 ```cpp
-int getNumberElementsDatabase(const ThermoContext& ctx);
-std::string getElementAtIndex(const ThermoContext& ctx, int index);
+int getNumberElementsDatabase() const;
+std::string getElementAtIndex(int index) const;
 
-std::pair<int, int> getNumberPhasesSystem(const ThermoContext& ctx);
-std::string getPhaseNameAtIndex(const ThermoContext& ctx, int index);
+std::pair<int, int> getNumberPhasesSystem() const;
+std::string getPhaseNameAtIndex(int index) const;
 
-int getNumberSpeciesSystem(const ThermoContext& ctx);
-std::string getSpeciesAtIndex(const ThermoContext& ctx, int index);
+int getNumberSpeciesSystem() const;
+std::string getSpeciesAtIndex(int index) const;
 ```
 
 **Note:** All indices are 0-based.
 
 **Example:**
 ```cpp
-int nElements = Thermochimica::getNumberElementsDatabase(ctx);
+int nElements = thermo.getNumberElementsDatabase();
 for (int i = 0; i < nElements; ++i) {
-    std::cout << Thermochimica::getElementAtIndex(ctx, i) << "\n";
+    std::cout << thermo.getElementAtIndex(i) << "\n";
 }
 
-auto [nSoln, nCond] = Thermochimica::getNumberPhasesSystem(ctx);
+auto [nSoln, nCond] = thermo.getNumberPhasesSystem();
 std::cout << "Solution phases: " << nSoln << ", Condensed: " << nCond << "\n";
 ```
 
@@ -421,32 +411,23 @@ std::cout << "Solution phases: " << nSoln << ", Condensed: " << nCond << "\n";
 For warm restarts when running sequential calculations:
 
 ```cpp
-void saveReinitData(ThermoContext& ctx);
-void setReinitRequested(ThermoContext& ctx, bool requested);
-bool isReinitDataAvailable(const ThermoContext& ctx);
-
-std::tuple<std::vector<int>, std::vector<double>, std::vector<double>,
-           std::vector<double>, std::vector<double>>
-getReinitData(const ThermoContext& ctx);
-
-void setReinitData(ThermoContext& ctx,
-                   const std::vector<int>& assemblage,
-                   const std::vector<double>& chemPot,
-                   const std::vector<double>& molesPhase,
-                   const std::vector<double>& elemPot,
-                   const std::vector<double>& molFrac);
+void saveReinitData();
+void setReinitRequested(bool requested);
+bool isReinitDataAvailable() const;
 ```
 
 **Example:**
 ```cpp
 // First calculation
-Thermochimica::thermochimica(ctx);
-Thermochimica::saveReinitData(ctx);
+thermo.calculate();
+thermo.saveReinitData();
 
 // Second calculation at nearby conditions
-Thermochimica::setTemperaturePressure(ctx, 1005.0, 1.0);
-Thermochimica::setReinitRequested(ctx, true);
-Thermochimica::thermochimica(ctx);  // Faster convergence
+thermo.reset();
+thermo.setTemperaturePressure(1005.0, 1.0);
+thermo.setElementMass(6, 1.0);
+thermo.setReinitRequested(true);
+thermo.calculate();  // Faster convergence
 ```
 
 ---
@@ -454,18 +435,18 @@ Thermochimica::thermochimica(ctx);  // Faster convergence
 ## Reset Functions
 
 ```cpp
-void resetThermo(ThermoContext& ctx);     // Reset for new calculation (keeps database)
-void resetThermoAll(ThermoContext& ctx);  // Full reset (clears database)
+void reset();      // Reset for new calculation (keeps database)
+void resetAll();   // Full reset (clears database)
 ```
 
 **Example:**
 ```cpp
 // Multiple calculations with same database
 for (double T = 500; T <= 2000; T += 100) {
-    Thermochimica::resetThermo(ctx);  // Clear previous results
-    Thermochimica::setTemperaturePressure(ctx, T, 1.0);
-    Thermochimica::setElementMass(ctx, 6, 1.0);
-    Thermochimica::thermochimica(ctx);
+    thermo.reset();  // Clear previous results
+    thermo.setTemperaturePressure(T, 1.0);
+    thermo.setElementMass(6, 1.0);
+    thermo.calculate();
 }
 ```
 
@@ -474,57 +455,74 @@ for (double T = 500; T <= 2000; T += 100) {
 ## Output Functions
 
 ```cpp
-void printResults(ThermoContext& ctx);
-void printResultsDetailed(ThermoContext& ctx);
-void writeJSON(ThermoContext& ctx, bool append = false);
-void computeHeatCapacity(ThermoContext& ctx);
+void printResults() const;
+void printResultsDetailed() const;
+void writeJSON(bool append = false) const;
+void computeHeatCapacity();
 ```
 
 ---
 
-## Utility Functions
+## Status and Error Handling
 
 ```cpp
-int getAtomicNumber(const std::string& symbol);
-std::string getElementSymbol(int atomicNumber);
-const char* getErrorMessage(int errorCode);
+int getInfoCode() const;       // Get error/info code (0 = success)
+bool isSuccess() const;        // Check if calculation succeeded
+std::string getErrorMessage() const;  // Get error description
 ```
 
 **Example:**
 ```cpp
-int Z = Thermochimica::getAtomicNumber("Fe");  // Returns 26
-std::string sym = Thermochimica::getElementSymbol(26);  // Returns "Fe"
+thermo.calculate();
 
-if (ctx.infoThermo() != 0) {
-    std::cerr << Thermochimica::getErrorMessage(ctx.infoThermo());
+if (!thermo.isSuccess()) {
+    std::cerr << "Error code: " << thermo.getInfoCode() << "\n";
+    std::cerr << "Error: " << thermo.getErrorMessage() << "\n";
 }
+```
+
+## Utility Functions (Static)
+
+```cpp
+static int getAtomicNumber(const std::string& symbol);
+static std::string getElementSymbol(int atomicNumber);
+```
+
+**Example:**
+```cpp
+int Z = ThermoClass::getAtomicNumber("Fe");  // Returns 26
+std::string sym = ThermoClass::getElementSymbol(26);  // Returns "Fe"
 ```
 
 ---
 
-## ThermoContext Class
+## Advanced: Custom Solvers
+
+ThermoClass supports dependency injection for custom implementations:
 
 ```cpp
-class ThermoContext {
-public:
-    std::unique_ptr<ThermoState> thermo;           // Core thermodynamic state
-    std::unique_ptr<ThermoIO> io;                  // Input/output state
-    std::unique_ptr<GEMState> gem;                 // Solver state
-    std::unique_ptr<ParserState> parser;           // Parser state
-    std::unique_ptr<SubMinState> submin;           // Subminimization state
-    std::unique_ptr<CTZState> ctz;                 // Common tangent zone state
-    std::unique_ptr<ReinitState> reinit;           // Reinitialization state
-    std::unique_ptr<PhaseConstraints> phaseConstraints;  // Phase fraction constraints
-
-    int infoThermo() const;      // Get error code (0 = success)
-    bool isSuccess() const;      // Check if last calculation succeeded
-    bool isDatabaseLoaded() const;
-};
+void setSolver(std::unique_ptr<ISolver> solver);
+void setNewtonSolver(std::unique_ptr<INewtonSolver> newton);
+void setLineSearch(std::unique_ptr<ILineSearch> lineSearch);
 ```
 
-**Direct state access:**
+See [class_based_api.md](class_based_api.md) for examples of custom solver implementations.
+
+## Advanced: Direct State Access
+
+For advanced use cases requiring direct state manipulation:
+
 ```cpp
-// Access temperature
+ThermoContext& getContext();
+const ThermoContext& getContext() const;
+```
+
+**Example:**
+```cpp
+// Access underlying context
+ThermoContext& ctx = thermo.getContext();
+
+// Direct state access
 double T = ctx.io->dTemperature;
 
 // Access species data

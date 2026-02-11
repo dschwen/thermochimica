@@ -1,57 +1,56 @@
 /// Basic usage example for Thermochimica C++
+/// Demonstrates the modern ThermoClass object-oriented API
 
-#include <thermochimica/Thermochimica.hpp>
+#include <thermochimica/ThermoClass.hpp>
 #include <iostream>
 
 int main() {
-    // Create a thermochimica context
-    Thermochimica::ThermoContext ctx;
+    // Create a ThermoClass instance (RAII - automatic cleanup)
+    Thermochimica::ThermoClass thermo;
 
     // Set units
-    Thermochimica::setStandardUnits(ctx);  // K, atm, moles
+    thermo.setStandardUnits();  // K, atm, moles
 
-    // Set the thermodynamic data file (relative to data directory)
-    Thermochimica::setThermoFilename(ctx, "CO.dat");
+    // Load database (combines setThermoFilename + parseCSDataFile)
+    int result = thermo.loadDatabase("CO.dat");
 
-    // Parse the data file
-    Thermochimica::parseCSDataFile(ctx);
-
-    if (ctx.infoThermo() != 0) {
-        std::cerr << "Error parsing data file (code " << ctx.infoThermo() << "): "
-                  << Thermochimica::getErrorMessage(ctx.infoThermo())
+    if (result != 0) {
+        std::cerr << "Error loading database (code " << result << "): "
+                  << thermo.getErrorMessage()
                   << std::endl;
         return 1;
     }
 
     std::cout << "Database loaded successfully.\n";
-    std::cout << "Elements: " << Thermochimica::getNumberElementsDatabase(ctx) << "\n";
-    std::cout << "Species: " << Thermochimica::getNumberSpeciesSystem(ctx) << "\n";
+    std::cout << "Elements: " << thermo.getNumberElementsDatabase() << "\n";
+    std::cout << "Species: " << thermo.getNumberSpeciesSystem() << "\n";
 
     // Set temperature and pressure
-    Thermochimica::setTemperaturePressure(ctx, 1000.0, 1.0);  // 1000 K, 1 atm
+    thermo.setTemperaturePressure(1000.0, 1.0);  // 1000 K, 1 atm
 
     // Set composition (by atomic number)
-    Thermochimica::setElementMass(ctx, 6, 1.0);   // 1 mole of Carbon
-    Thermochimica::setElementMass(ctx, 8, 2.0);   // 2 moles of Oxygen
+    thermo.setElementMass(6, 1.0);   // 1 mole of Carbon
+    thermo.setElementMass(8, 2.0);   // 2 moles of Oxygen
 
     // Run the calculation
-    Thermochimica::thermochimica(ctx);
+    result = thermo.calculate();
 
     // Check result
-    if (ctx.isSuccess()) {
+    if (thermo.isSuccess()) {
         std::cout << "\nCalculation successful!\n";
         std::cout << "System Gibbs Energy: "
-                  << Thermochimica::getGibbsEnergy(ctx)
+                  << thermo.getGibbsEnergy()
                   << " J\n";
 
         // Print results
-        Thermochimica::printResults(ctx);
+        thermo.printResults();
     } else {
-        std::cerr << "Calculation failed (code " << ctx.infoThermo() << "): "
-                  << Thermochimica::getErrorMessage(ctx.infoThermo())
+        std::cerr << "Calculation failed (code " << result << "): "
+                  << thermo.getErrorMessage()
                   << std::endl;
 
-        // Debug info
+        // Debug info (accessing internal context for diagnostics)
+        auto& ctx = thermo.getContext();
         std::cerr << "\nDebug info:\n";
         std::cerr << "  nSpecies in thermo state: " << ctx.thermo->nSpecies << "\n";
         std::cerr << "  nElements in thermo state: " << ctx.thermo->nElements << "\n";
